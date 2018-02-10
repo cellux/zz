@@ -1,0 +1,14 @@
+HTTP/1.1 302 Found
+Cache-Control: private
+Content-Type: text/html; charset=UTF-8
+Referrer-Policy: no-referrer
+Location: http://www.google.hu/?gfe_rd=cr&ei=RWYpWbieF8Li8Afe153ICg
+Content-Length: 258
+Date: Sat, 27 May 2017 11:43:01 GMT
+
+<HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
+<TITLE>302 Moved</TITLE></HEAD><BODY>
+<H1>302 Moved</H1>
+The document has moved
+<A HREF="http://www.google.hu/?gfe_rd=cr&amp;ei=RWYpWbieF8Li8Afe153ICg">here</A>.
+</BODY></HTML>
