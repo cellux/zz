@@ -43,4 +43,12 @@ P.libs = {
    "nanomsg",
 }
 
+P.apps = {
+   "zz"
+}
+
+P.install = {
+   "zz"
+}
+
 return P
