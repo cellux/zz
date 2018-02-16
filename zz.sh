@@ -383,7 +383,9 @@ do_test() {
         echo "require_test('$t')"
       done
     fi
-  } | compile_main zz_test ${PACKAGE_LIBS[@]}
+  } | compile_main \
+    $(resolve_lib zz_test) \
+    $(package_libs | resolve_libs)
   "$TMPDIR/_main" # run tests
 }
 
