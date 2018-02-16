@@ -521,16 +521,20 @@ end
 
 function M.basename(path)
    -- may modify its argument, so let's make a copy
-   local path_copy = ffi.new("char[?]", #path+1)
+   local path_copy, block_size = mm.get_block(#path+1)
    ffi.copy(path_copy, path)
-   return ffi.string(ffi.C.basename(path_copy))
+   local rv = ffi.string(ffi.C.basename(path_copy))
+   mm.ret_block(path_copy, block_size)
+   return rv
 end
 
 function M.dirname(path)
    -- may modify its argument, so let's make a copy
-   local path_copy = ffi.new("char[?]", #path+1)
+   local path_copy, block_size = mm.get_block(#path+1)
    ffi.copy(path_copy, path)
-   return ffi.string(ffi.C.dirname(path_copy))
+   local rv = ffi.string(ffi.C.dirname(path_copy))
+   mm.ret_block(path_copy, block_size)
+   return rv
 end
 
 local function join(path, ...)
