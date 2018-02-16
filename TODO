@@ -1,12 +1,20 @@
 === backlog ===
 
-[todo] zz download
+[todo] fs.mkpath
+[todo] zz clone
 [todo] zz build
 [todo] zz install
 [todo] zz get
 [todo] zz init
 [todo] zz test
 [todo] zz run
+[todo] optimize startup: a simple hello,world app should have zero latency
+[todo] add testing module to zz core
+[todo] test runner should provide tmpdir
+
+=== 2018-02-16 Friday ===
+
+[done] fs.realpath
 
 === 2018-02-11 Sunday ===
 
