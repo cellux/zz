@@ -6,6 +6,7 @@ local buffer = require('buffer')
 local mm = require('mm')
 local time = require('time') -- for struct timespec
 local env = require('env')
+local errno = require('errno')
 local util = require('util')
 
 ffi.cdef [[
@@ -47,6 +48,10 @@ int     chmod (const char *file, __mode_t mode);
 int     unlink (const char *filename);
 int     mkdir (const char *file, __mode_t mode);
 int     rmdir (const char *filename);
+
+int     symlink (const char *oldname, const char *newname);
+ssize_t readlink (const char *filename, char *buffer, size_t size);
+char   *realpath (const char *name, char *resolved);
 
 int     dup (int old);
 int     dup2 (int old, int new);
@@ -132,6 +137,8 @@ struct zz_async_fs_stat_request {
 };
 
 ]]
+
+local PATH_MAX = 4096 -- as defined in /usr/include/linux/limits.h
 
 local M = {}
 
@@ -517,6 +524,32 @@ end
 
 function M.rmdir(path)
    return util.check_errno("rmdir", ffi.C.rmdir(path))
+end
+
+function M.symlink(oldname, newname)
+   return util.check_errno("symlink", ffi.C.symlink(oldname, newname))
+end
+
+function M.readlink(filename)
+   local buf, block_size = mm.get_block(PATH_MAX)
+   local size = ffi.C.readlink(filename, buf, PATH_MAX)
+   if size == PATH_MAX then
+      ef("readlink: buffer overflow for filename: %s", filename)
+   end
+   local rv = ffi.string(buf, size)
+   mm.ret_block(buf, block_size)
+   return rv
+end
+
+function M.realpath(name)
+   local ptr = ffi.C.realpath(name, nil)
+   if ptr ~= nil then
+      local rv = ffi.string(ptr)
+      ffi.C.free(ptr)
+      return rv
+   else
+      ef("realpath() failed: %s: %s", name, errno.strerror())
+   end
 end
 
 function M.basename(path)

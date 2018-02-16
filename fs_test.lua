@@ -6,6 +6,7 @@ local stream = require('stream')
 local util = require('util')
 local digest = require('digest')
 local buffer = require('buffer')
+local process = require('process')
 local re = require('re')
 local mm = require('mm')
 
@@ -332,6 +333,21 @@ local function test_stream_write()
    fs.unlink(fout_path)
 end
 
+local function test_symlink_readlink_realpath()
+   local rel = "testdata/arborescence.jpg"
+   local abs = fs.realpath(rel)
+   assert(abs ~= rel)
+   assert.equals(fs.readfile(abs), fs.readfile(rel))
+   local tmp = sf("/tmp/%s-arborescence.jpg", process.getpid())
+   fs.symlink(abs, tmp)
+   assert(fs.is_lnk(tmp))
+   assert.equals(fs.readlink(tmp), abs)
+   assert.equals(fs.realpath(tmp), abs)
+   assert.equals(fs.realpath(sf("/tmp/../."..tmp)), abs)
+   fs.unlink(tmp)
+   assert(not fs.exists(tmp))
+end
+
 local function test()
    test_read()
    test_seek()
@@ -346,6 +362,7 @@ local function test()
    test_join()
    test_stream_read()
    test_stream_write()
+   test_symlink_readlink_realpath()
 end
 
 -- async
