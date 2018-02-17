@@ -118,8 +118,8 @@ M.BlockPool = BlockPool
 
 local block_pool = BlockPool(BLOCK_POOL_ARENA_SIZE)
 
-function M.get_block(size)
-   local ptr_type = "void*"
+function M.get_block(size, ptr_type)
+   ptr_type = ptr_type or "void*"
    if type(size) == "string" then
       ptr_type = size.."*"
       size = ffi.sizeof(size)
