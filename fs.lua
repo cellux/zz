@@ -583,4 +583,98 @@ end
 
 M.join = join
 
+local Path_mt = {}
+
+function Path_mt:__tostring()
+   local buf, block_size = mm.get_block(PATH_MAX, "char*")
+   local offset = 0
+   local idx = 1
+   -- the first component of an absolute path is /
+   if self.components[1] == "/" then
+      buf[0] = 0x2f -- slash
+      offset = 1
+      idx = 2
+   end
+   -- append components one by one to buf
+   while idx <= #self.components do
+      local name = self.components[idx]
+      local len = #name
+      if offset+len > block_size then
+         ef("path too long")
+      end
+      ffi.copy(buf+offset, name, len)
+      offset = offset + len
+      -- append a slash after every component except the last
+      if idx < #self.components then
+         if offset == block_size then
+            ef("path too long")
+         end
+         buf[offset] = 0x2f -- slash
+         offset = offset + 1
+      end
+      idx = idx + 1
+   end
+   local path = ffi.string(buf, offset)
+   mm.ret_block(buf, block_size)
+   return path
+end
+
+local function parse_path(path)
+   local components = {}
+   local ibeg = 1
+   if path:sub(1,1) == "/" then
+      table.insert(components, "/")
+      ibeg = 2
+   end
+   while ibeg <= #path do
+      local iend = path:find("/", ibeg, true) or #path+1
+      local name = path:sub(ibeg, iend-1)
+      table.insert(components, name)
+      ibeg = iend + 1
+   end
+   return components
+end
+
+local function check_path_components(components)
+   if type(components) ~= "table" then
+      ef("check_path_components: path components must be in a table")
+   end
+   if #components == 0 then
+      ef("check_path_components: table is empty")
+   end
+   local idx = 1
+   if components[1] == "/" then
+      idx = 2
+   end
+   while idx <= #components do
+      name = components[idx]
+      if not name then
+         ef("check_path_components: found empty component")
+      end
+      if name:match("/") then
+         ef("check_path_components: found a slash inside a component")
+      end
+      idx = idx + 1
+   end
+end
+
+function M.Path(path)
+   local self = {}
+   if path == nil then
+      ef("invalid path: nil")
+   elseif type(path) == "string" then
+      if path == "" then
+         ef("invalid path: ''")
+      end
+      self.components = parse_path(path)
+   elseif type(path) == "table" then
+      if #path == 0 then
+         ef("invalid path: {}")
+      end
+      self.components = path
+   end
+   check_path_components(self.components)
+   return setmetatable(self, Path_mt)
+end
+
 return setmetatable(M, { __index = ffi.C })

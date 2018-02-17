@@ -348,6 +348,30 @@ local function test_symlink_readlink_realpath()
    assert(not fs.exists(tmp))
 end
 
+local function test_Path()
+   assert.throws(function () fs.Path() end, "invalid path: nil")
+   assert.throws(function () fs.Path(nil) end, "invalid path: nil")
+   assert.throws(function () fs.Path("") end, "invalid path: ''")
+   assert.throws(function () fs.Path{} end, "invalid path: {}")
+   assert.equals(tostring(fs.Path(".")), ".")
+   assert.equals(fs.Path(".").components, {"."})
+   assert.equals(tostring(fs.Path("/")), "/")
+   assert.equals(fs.Path("/").components, {"/"})
+   assert.equals(tostring(fs.Path("abc")), "abc")
+   assert.equals(fs.Path("abc").components, {"abc"})
+   assert.equals(tostring(fs.Path("/abc")), "/abc")
+   assert.equals(fs.Path("/abc").components, {"/","abc"})
+   assert.equals(tostring(fs.Path("abc/")), "abc")
+   assert.equals(fs.Path("abc/").components, {"abc"})
+   assert.equals(tostring(fs.Path("abc/.")), "abc/.")
+   assert.equals(fs.Path("abc/.").components, {"abc","."})
+   assert.equals(tostring(fs.Path("./abc")), "./abc")
+   assert.equals(fs.Path("./abc").components, {".","abc"})
+   assert.equals(tostring(fs.Path("abc/def")), "abc/def")
+   assert.equals(fs.Path("abc/def").components, {"abc","def"})
+   assert.equals(tostring(fs.Path{"abc","def"}), "abc/def")
+end
+
 local function test()
    test_read()
    test_seek()
@@ -363,6 +387,7 @@ local function test()
    test_stream_read()
    test_stream_write()
    test_symlink_readlink_realpath()
+   test_Path()
 end
 
 -- async

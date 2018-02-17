@@ -11,6 +11,7 @@
 [todo] optimize startup: a simple hello,world app should have zero latency
 [todo] add testing module to zz core
 [todo] test runner should provide tmpdir
+[todo] improve assert_test
 
 === 2018-02-16 Friday ===
 
