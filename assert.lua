@@ -10,6 +10,18 @@ local function assert_true(x, err, level)
    end
 end
 
+local function assert_false(x, err, level)
+   assert_true(x==false, err, level+1)
+end
+
+M.is_false = assert_false
+
+local function assert_nil(x, err, level)
+   assert_true(x==nil, err, level+1)
+end
+
+M.is_nil = assert_nil
+
 local function assert_type(x, t, name_of_x, level)
    level = level or 2
    if name_of_x then
@@ -46,10 +58,18 @@ end
 
 M.equals = assert_equals
 
+local function assert_match(pattern, value, err, level)
+   level = level or 2
+   local m = re.match(pattern, value)
+   assert_true(m ~= nil, err, level+1)
+end
+
+M.match = assert_match
+
 local function assert_throws(f, pattern)
    local ok, err = pcall(f)
-   assert(ok==false, sf("%s expected to throw", f))
-   assert(re.match(pattern, err), sf("%s expected to throw an error matching '%s'", f, pattern))
+   assert_false(ok, sf("%s expected to throw", f), 3)
+   assert_match(pattern, err, sf("%s expected to throw an error matching '%s', got: %s", f, pattern, err), 3)
 end
 
 M.throws = assert_throws
