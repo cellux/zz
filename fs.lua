@@ -7,6 +7,7 @@ local mm = require('mm')
 local time = require('time') -- for struct timespec
 local env = require('env')
 local errno = require('errno')
+local inspect = require('inspect')
 local util = require('util')
 
 ffi.cdef [[
@@ -275,7 +276,7 @@ File_mt.__gc = File_mt.close
 local File = ffi.metatype("struct zz_fs_File_ct", File_mt)
 
 function M.open(path, flags, mode)
-   local fd = util.check_errno("open", ffi.C.open(path, flags or ffi.C.O_RDONLY, mode or 0666))
+   local fd = util.check_errno("open", ffi.C.open(path, flags or ffi.C.O_RDONLY, mode or util.oct("666")))
    return File(fd)
 end
 
@@ -519,7 +520,7 @@ function M.unlink(path)
 end
 
 function M.mkdir(path, mode)
-   return util.check_errno("mkdir", ffi.C.mkdir(path, mode or 0777))
+   return util.check_errno("mkdir", ffi.C.mkdir(path, mode or util.oct("777")))
 end
 
 function M.rmdir(path)

@@ -10,10 +10,6 @@ local process = require('process')
 local re = require('re')
 local mm = require('mm')
 
-local function oct(s)
-   return tonumber(s, 8)
-end
-
 local function test_read()
    -- read whole file at once
    local f = fs.open('testdata/hello.txt')
@@ -91,16 +87,16 @@ local function test_exists()
 end
 
 local function test_chmod()
-   fs.chmod("testdata/hello.txt", oct("755"))
-   assert.equals(fs.stat("testdata/hello.txt").perms, oct("755"))
+   fs.chmod("testdata/hello.txt", util.oct("755"))
+   assert.equals(fs.stat("testdata/hello.txt").perms, util.oct("755"))
    assert(fs.is_executable("testdata/hello.txt"))
-   fs.chmod("testdata/hello.txt", oct("644"))
-   assert(fs.stat("testdata/hello.txt").perms == oct("644"))
+   fs.chmod("testdata/hello.txt", util.oct("644"))
+   assert(fs.stat("testdata/hello.txt").perms == util.oct("644"))
    assert(not fs.is_executable("testdata/hello.txt"))
 end
 
 local function test_readable_writable_executable()
-   local hello_txt_perms = oct("644")
+   local hello_txt_perms = util.oct("644")
    fs.chmod("testdata/hello.txt", hello_txt_perms)
 
    assert(fs.is_readable("testdata/hello.txt"))
@@ -112,17 +108,17 @@ local function test_readable_writable_executable()
    assert(not fs.is_writable("testdata/hello.txt"))
    assert(not fs.is_executable("testdata/hello.txt"))
 
-   fs.chmod("testdata/hello.txt", oct("400"))
+   fs.chmod("testdata/hello.txt", util.oct("400"))
    assert(fs.is_readable("testdata/hello.txt"))
    assert(not fs.is_writable("testdata/hello.txt"))
    assert(not fs.is_executable("testdata/hello.txt"))
 
-   fs.chmod("testdata/hello.txt", oct("200"))
+   fs.chmod("testdata/hello.txt", util.oct("200"))
    assert(not fs.is_readable("testdata/hello.txt"))
    assert(fs.is_writable("testdata/hello.txt"))
    assert(not fs.is_executable("testdata/hello.txt"))
 
-   fs.chmod("testdata/hello.txt", oct("100"))
+   fs.chmod("testdata/hello.txt", util.oct("100"))
    assert(not fs.is_readable("testdata/hello.txt"))
    assert(not fs.is_writable("testdata/hello.txt"))
    assert(fs.is_executable("testdata/hello.txt"))
