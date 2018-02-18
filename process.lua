@@ -44,6 +44,10 @@ char *getcwd (char *buf, size_t size);
 int chdir (const char *path);
 void exit (int);
 
+/* umask */
+
+__mode_t umask (__mode_t mask);
+
 ]]
 
 local M = {}
@@ -115,6 +119,15 @@ end
 
 function M.exit(status)
    ffi.C.exit(status or 0)
+end
+
+function M.umask(umask)
+   local prev_umask = ffi.C.umask(umask or 0)
+   if not umask then
+      -- getter: revert to previous value
+      ffi.C.umask(prev_umask)
+   end
+   return prev_umask
 end
 
 return M

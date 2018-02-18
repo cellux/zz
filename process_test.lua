@@ -105,3 +105,19 @@ if pid == 0 then
 else
    process.waitpid(pid)
 end
+
+-- umask
+
+-- umask() without arguments returns the current umask
+local old_umask = process.umask()
+local new_umask = tonumber("077", 8)
+-- umask(x) sets the current umask and returns the previous one
+assert.equals(process.umask(new_umask), old_umask)
+assert.equals(process.umask(), new_umask)
+local tmpdir = sf("/tmp/process_test_%d", process.getpid())
+assert.equals(fs.mkdir(tmpdir, tonumber("777", 8)), 0)
+assert(fs.is_dir(tmpdir))
+assert.equals(fs.stat(tmpdir).perms, tonumber("700", 8))
+assert.equals(fs.rmdir(tmpdir), 0)
+assert.equals(process.umask(old_umask), new_umask)
+assert.equals(process.umask(), old_umask)
