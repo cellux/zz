@@ -368,6 +368,15 @@ local function test_Path()
    assert.equals(tostring(fs.Path{"abc","def"}), "abc/def")
 end
 
+local function test_mkdir()
+   local tmpdir = sf("/tmp/fs_test_%d", process.getpid())
+   assert.equals(0, fs.mkdir(tmpdir))
+   assert(fs.is_dir(tmpdir))
+   local s = fs.stat(tmpdir)
+   assert.equals(s.perms, bit.band(util.oct("777"), bit.bnot(process.umask())))
+   process.system(sf("rm -rf %s", tmpdir))
+end
+
 local function test()
    test_read()
    test_seek()
@@ -384,6 +393,7 @@ local function test()
    test_stream_write()
    test_symlink_readlink_realpath()
    test_Path()
+   test_mkdir()
 end
 
 -- async
