@@ -212,4 +212,8 @@ function M.hexstr(data)
    return tostring(hex)
 end
 
+function M.oct(s)
+   return tonumber(tostring(s), 8)
+end
+
 return M

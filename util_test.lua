@@ -210,3 +210,8 @@ assert.equals(util.hexstr(), "")
 assert.equals(util.hexstr("abc"), "616263")
 assert.equals(util.hexstr("\x00\x55\xaa\xff"), "0055aaff")
 assert.equals(util.hexstr(buffer.copy("abc")), "616263")
+
+-- oct
+
+assert.equals(util.oct(777), 511)
+assert.equals(util.oct("777"), 511)
