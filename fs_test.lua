@@ -377,6 +377,22 @@ local function test_mkdir()
    process.system(sf("rm -rf %s", tmpdir))
 end
 
+local function test_mkpath()
+   local tmpdir = sf("/tmp/fs_test_%d", process.getpid())
+   fs.mkdir(tmpdir)
+   local test_path = fs.join(tmpdir, "zsuba/guba/csicseri")
+   local old_umask = process.umask(util.oct("022"))
+   fs.mkpath(test_path)
+   assert(fs.is_dir(fs.join(tmpdir, "zsuba")))
+   assert.equals(fs.stat(fs.join(tmpdir, "zsuba")).perms, util.oct("755"))
+   assert(fs.is_dir(fs.join(tmpdir, "zsuba", "guba")))
+   assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba")).perms, util.oct("755"))
+   assert(fs.is_dir(fs.join(tmpdir, "zsuba", "guba", "csicseri")))
+   assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba", "csicseri")).perms, util.oct("755"))
+   process.system(sf("rm -rf %s", tmpdir))
+   process.umask(old_umask)
+end
+
 local function test()
    test_read()
    test_seek()
@@ -394,6 +410,7 @@ local function test()
    test_symlink_readlink_realpath()
    test_Path()
    test_mkdir()
+   test_mkpath()
 end
 
 -- async

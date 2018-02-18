@@ -659,11 +659,9 @@ local function check_path_components(components)
    end
 end
 
-function M.Path(path)
+local function Path(path)
    local self = {}
-   if path == nil then
-      ef("invalid path: nil")
-   elseif type(path) == "string" then
+   if type(path) == "string" then
       if path == "" then
          ef("invalid path: ''")
       end
@@ -673,9 +671,24 @@ function M.Path(path)
          ef("invalid path: {}")
       end
       self.components = path
+   else
+      ef("invalid path: %s", inspect(path))
    end
    check_path_components(self.components)
    return setmetatable(self, Path_mt)
+end
+
+M.Path = Path
+
+function M.mkpath(path)
+   path = Path(path)
+   local dir
+   for _,name in ipairs(path.components) do
+      dir = dir and sf("%s/%s", dir, name) or name
+      if not M.exists(dir) then
+         M.mkdir(dir)
+      end
+   end
 end
 
 return setmetatable(M, { __index = ffi.C })
