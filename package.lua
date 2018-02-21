@@ -2,6 +2,12 @@ local P = {}
 
 P.package = "github.com/cellux/zz"
 
+P.native = {
+   "luajit",
+   "cmp",
+   "nanomsg",
+}
+
 P.modules = {
    "adt",
    "argparser",
@@ -37,10 +43,7 @@ P.modules = {
 }
 
 P.libs = {
-   "zz",
-   "luajit",
-   "cmp",
-   "nanomsg",
+   "zz"
 }
 
 P.apps = {

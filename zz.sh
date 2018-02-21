@@ -60,7 +60,7 @@ LUAJIT_VER="2.1.0-beta3"
 LUAJIT_TGZ="LuaJIT-$LUAJIT_VER.tar.gz"
 LUAJIT_URL="http://luajit.org/download/$LUAJIT_TGZ"
 LUAJIT_DIR="LuaJIT-${LUAJIT_VER}"
-LUAJIT_ROOT="deps/$LUAJIT_DIR"
+LUAJIT_ROOT="native/$LUAJIT_DIR"
 LUAJIT_SRC="$LUAJIT_ROOT/src"
 LUAJIT_LIB="$LUAJIT_SRC/libluajit.a"
 LUAJIT_BIN="$LUAJIT_SRC/luajit"
@@ -69,7 +69,7 @@ CMP_VER=10
 CMP_TGZ="cmp-$CMP_VER.tar.gz"
 CMP_URL="https://github.com/camgunz/cmp/archive/v$CMP_VER.tar.gz"
 CMP_DIR="cmp-$CMP_VER"
-CMP_ROOT="deps/$CMP_DIR"
+CMP_ROOT="native/$CMP_DIR"
 CMP_SRC="$CMP_ROOT"
 CMP_OBJ="$CMP_SRC/cmp.o"
 
@@ -77,7 +77,7 @@ NANOMSG_VER="1.1.2"
 NANOMSG_TGZ="nanomsg-$NANOMSG_VER.tar.gz"
 NANOMSG_URL="https://github.com/nanomsg/nanomsg/archive/$NANOMSG_VER.tar.gz"
 NANOMSG_DIR="nanomsg-$NANOMSG_VER"
-NANOMSG_ROOT="deps/$NANOMSG_DIR"
+NANOMSG_ROOT="native/$NANOMSG_DIR"
 NANOMSG_LIB="$NANOMSG_ROOT/libnanomsg.a"
 NANOMSG_SRC="$NANOMSG_ROOT/src"
 
@@ -108,9 +108,9 @@ fi
 download() {
   local url="$1"
   local target="$2"
-  if [ ! -e "deps/$target" ]; then
-    if ! run curl -skL -o "deps/$target" "$url"; then
-      rm -f "deps/$target"
+  if [ ! -e "native/$target" ]; then
+    if ! run curl -skL -o "native/$target" "$url"; then
+      rm -f "native/$target"
       die "$url: download failed!"
     fi
   fi
@@ -119,11 +119,11 @@ download() {
 extract() {
   local tgz="$1"
   local dir="$2"
-  if [ ! -e "deps/$dir/.extracted" ]; then
-    if ! run tar xzf "deps/$tgz" -C deps || [ ! -d "deps/$dir" ]; then
-      die "deps/$tgz: extraction failed!"
+  if [ ! -e "native/$dir/.extracted" ]; then
+    if ! run tar xzf "native/$tgz" -C native || [ ! -d "native/$dir" ]; then
+      die "native/$tgz: extraction failed!"
     fi
-    run touch "deps/$dir/.extracted"
+    run touch "native/$dir/.extracted"
   fi
 }
 
@@ -352,22 +352,22 @@ install_apps() {
   done
 }
 
-build_deps() {
-  mkdir -pv deps
+build_native() {
+  mkdir -pv native
   build_luajit
   build_cmp
   build_nanomsg
 }
 
 do_build() {
-  build_deps
+  build_native
   build_modules
   build_apps
   install_apps
 }
 
 do_test() {
-  build_deps
+  build_native
   build_modules
   build_test_modules
   {
@@ -398,7 +398,7 @@ do_clean() {
 
 do_distclean() {
   do_clean
-  run rm -rf deps
+  run rm -rf native
 }
 
 GOAL="${1:-build}"
