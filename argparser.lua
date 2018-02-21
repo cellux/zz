@@ -22,7 +22,11 @@ local function ArgDescriptor(arg_opts)
       error("argument without a name")
    end
    if not self.type then
-      error("argument has no type")
+      if self.option then
+         self.type = "bool"
+      else
+         self.type = "string"
+      end
    end
    if not constructors[self.type] then
       ef("invalid type for argument '%s': %s", self.name, self.type)
