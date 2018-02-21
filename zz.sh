@@ -339,7 +339,12 @@ build_test_modules() {
 build_apps() {
   for app in $(package_apps); do
     compile_module $app
-    echo "require('$app')" | compile_main \
+    {
+      echo "local app_module = require('$(mangle $app)')"
+      echo "if type(app_module)=='table' and app_module.main then"
+      echo "  app_module.main()"
+      echo "end"
+    } | compile_main \
       $(resolve_obj $app) \
       $(package_libs | resolve_libs)
     install -v -T -m 0755 "$TMPDIR/_main" "$BINDIR/$app"
