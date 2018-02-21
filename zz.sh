@@ -363,6 +363,10 @@ do_build() {
   build_native
   build_modules
   build_apps
+}
+
+do_install() {
+  do_build
   install_apps
 }
 

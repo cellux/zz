@@ -1,3 +1,7 @@
+.PHONY: install
+install:
+	@./zz.sh install
+
 .PHONY: build
 build:
 	@./zz.sh build
