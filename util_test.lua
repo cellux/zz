@@ -85,6 +85,13 @@ local inst = { x=5, y=8 }
 local a = A(inst)
 assert(a==inst)
 
+-- a simple getter
+
+function A:get_x()
+   return self.x
+end
+assert.equals(a:get_x(), 5)
+
 -- if we define a `create' method, it will be used to create instances
 local A = util.Class()
 function A:create(opts)
