@@ -12,12 +12,6 @@ local util = require('util')
 
 ffi.cdef [[
 
-enum {
-  O_RDONLY = 0,
-  O_WRONLY = 1,
-  O_RDWR = 2
-};
-
 int     open (const char *file, int oflag, ...);
 ssize_t read (int fd, void *buf, size_t nbytes);
 ssize_t write (int fd, const void *buf, size_t n);

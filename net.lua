@@ -190,22 +190,6 @@ int gethostbyname_r (const char *name,
 			               struct hostent **result,
 			               int *h_errnop);
 
-/* fcntl.h */
-
-int fcntl(int fd, int cmd, ...);
-
-enum {
-  F_DUPFD = 0,
-  F_GETFD = 1,
-  F_SETFD = 2,
-  F_GETFL = 3,
-  F_SETFL = 4
-};
-
-enum {
-  O_NONBLOCK = 04000
-};
-
 ]]
 
 local sockaddr_mt = {}

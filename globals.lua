@@ -25,6 +25,27 @@ void *malloc (size_t size);
 void free (void *ptr);
 
 enum {
+  O_RDONLY    = 00000000,
+  O_WRONLY    = 00000001,
+  O_RDWR      = 00000002,
+  O_ACCMODE   = 00000003,
+  O_CREAT     = 00000100,
+  O_EXCL      = 00000200,
+  O_NOCTTY    = 00000400,
+  O_TRUNC     = 00001000,
+  O_APPEND    = 00002000,
+  O_NONBLOCK  = 00004000,
+  O_SYNC      = 04010000,
+  O_ASYNC     = 00020000,
+  O_DIRECT    = 00040000,
+  O_LARGEFILE = 00100000,
+  O_DIRECTORY = 00200000,
+  O_NOFOLLOW  = 00400000,
+  O_NOATIME   = 01000000,
+  O_CLOEXEC   = 02000000
+};
+
+enum {
   SEEK_SET = 0,
   SEEK_CUR = 1,
   SEEK_END = 2
@@ -33,6 +54,18 @@ enum {
 ssize_t read (int FILEDES, void *BUFFER, size_t SIZE);
 ssize_t write (int FILEDES, const void *BUFFER, size_t SIZE);
 int close (int FILEDES);
+
+/* fcntl.h */
+
+int fcntl(int fd, int cmd, ...);
+
+enum {
+  F_DUPFD = 0,
+  F_GETFD = 1,
+  F_SETFD = 2,
+  F_GETFL = 3,
+  F_SETFL = 4
+};
 
 ]]
 
