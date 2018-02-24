@@ -385,10 +385,10 @@ local function test_mkdir()
 end
 
 local function test_mkpath()
+   local old_umask = process.umask(util.oct("022"))
    local tmpdir = sf("/tmp/fs_test_%d", process.getpid())
    fs.mkdir(tmpdir)
    local test_path = fs.join(tmpdir, "zsuba/guba/csicseri")
-   local old_umask = process.umask(util.oct("022"))
    fs.mkpath(test_path)
    assert(fs.is_dir(fs.join(tmpdir, "zsuba")))
    assert.equals(fs.stat(fs.join(tmpdir, "zsuba")).perms, util.oct("755"))
@@ -396,6 +396,18 @@ local function test_mkpath()
    assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba")).perms, util.oct("755"))
    assert(fs.is_dir(fs.join(tmpdir, "zsuba", "guba", "csicseri")))
    assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba", "csicseri")).perms, util.oct("755"))
+   process.system(sf("rm -rf %s", tmpdir))
+   process.umask(old_umask)
+end
+
+local function test_touch()
+   local old_umask = process.umask(util.oct("022"))
+   local tmpdir = sf("/tmp/fs_test_%d", process.getpid())
+   fs.mkdir(tmpdir)
+   local test_path = fs.join(tmpdir, "touch")
+   fs.touch(test_path)
+   assert(fs.is_reg(test_path))
+   assert.equals(fs.stat(test_path).perms, util.oct("644"))
    process.system(sf("rm -rf %s", tmpdir))
    process.umask(old_umask)
 end
@@ -419,6 +431,7 @@ local function test()
    test_Path()
    test_mkdir()
    test_mkpath()
+   test_touch()
 end
 
 -- async

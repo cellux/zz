@@ -12,7 +12,7 @@ local util = require('util')
 
 ffi.cdef [[
 
-int     open (const char *file, int oflag, ...);
+int     open (const char *file, int oflag, __mode_t mode);
 ssize_t read (int fd, void *buf, size_t nbytes);
 ssize_t write (int fd, const void *buf, size_t n);
 __off_t lseek (int fd, __off_t offset, int whence);
