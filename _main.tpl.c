@@ -110,8 +110,8 @@ static int pmain(lua_State *L)
   luaopen_math(L);
   luaopen_string(L);
   luaopen_table(L);
-  //luaopen_io(L);
-  //luaopen_os(L);
+  luaopen_io(L); // needed by jit.*
+  luaopen_os(L); // needed by jit.*
   luaopen_package(L);
   luaopen_debug(L);
   luaopen_bit(L);
