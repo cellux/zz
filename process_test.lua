@@ -52,13 +52,20 @@ if pid == 0 then
    sp:close()
    -- redirect command's stdout to parent through socket
    assert.equals(ffi.C.dup2(sc.fd, 1), 1)
-   process.system("echo hello; echo world")
+   -- a string argument is passed to the system shell
+   local status = process.system("(echo hello; echo world) | tr a-z A-Z")
+   assert.equals(status, 0)
+   -- a table argument is executed via execvp()
+   local status = process.system { "bash", "-c", "(echo hello; echo world) | tr a-z A-Z" }
+   assert.equals(status, 0)
+   local status = process.system "bash -c 'exit 123'"
+   assert.equals(status, 123)
    sc:close()
    process.exit()
 else
    sc:close()
    -- read(0) means read until EOF
-   assert.equals(sp:read(0), "hello\nworld\n")
+   assert.equals(sp:read(0), "HELLO\nWORLD\n".."HELLO\nWORLD\n")
    sp:close()
    assert.equals(process.waitpid(pid), pid)
 end

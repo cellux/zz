@@ -74,10 +74,6 @@ function M.fork(child_fn)
    end
 end
 
-function M.system(command)
-   return ffi.C.system(command)
-end
-
 function M.execvp(path, argv)
    -- stringify args
    for i=1,#argv do
@@ -89,7 +85,27 @@ function M.execvp(path, argv)
       execvp_argv[i-1] = ffi.cast("char*", argv[i])
    end
    execvp_argv[#argv] = nil
+   -- if execvp() is successful, the following call doesn't return
    util.check_errno("execvp", ffi.C.execvp(path, execvp_argv))
+end
+
+function M.system(command)
+   if type(command) == "string" then
+      local status = ffi.C.system(command)
+      -- see /usr/include/bits/waitstatus.h
+      return bit.rshift(status, 8)
+   elseif type(command) == "table" then
+      local pid = util.check_errno("fork", ffi.C.fork())
+      if pid == 0 then
+         M.execvp(command[1], command)
+      else
+         local wpid, status = M.waitpid(pid)
+         assert(wpid==pid)
+         return bit.rshift(status, 8)
+      end
+   else
+      ef("system(): invalid command: %s", command)
+   end
 end
 
 function M.kill(pid, signum)
