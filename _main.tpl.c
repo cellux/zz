@@ -82,11 +82,10 @@ static int dolibrary(lua_State *L, const char *name)
 
 static void set_arg(lua_State *L, int argc, char **argv)
 {
-  /* set the global Lua variable "arg" to the list of command line
-   * arguments */
+  /* copy argv to the global Lua variable "arg" */
   int i;
   lua_createtable(L, argc, 0);
-  for (i=1; i<argc; i++) {
+  for (i=0; i<argc; i++) {
     lua_pushstring(L, argv[i]);
     lua_rawseti(L, -2, i);
   }
