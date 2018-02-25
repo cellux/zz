@@ -377,13 +377,16 @@ local Stat_accessors = {
       return tonumber(ffi.C.zz_fs_Stat_blocks(buf))
    end,
    atime = function(buf)
-      return tonumber(ffi.C.zz_fs_Stat_atime(buf).tv_sec)
+      local timespec = ffi.C.zz_fs_Stat_atime(buf)
+      return tonumber(timespec.tv_sec) + tonumber(timespec.tv_nsec)/1000000000
    end,
    mtime = function(buf)
-      return tonumber(ffi.C.zz_fs_Stat_mtime(buf).tv_sec)
+      local timespec = ffi.C.zz_fs_Stat_mtime(buf)
+      return tonumber(timespec.tv_sec) + tonumber(timespec.tv_nsec)/1000000000
    end,
    ctime = function(buf)
-      return tonumber(ffi.C.zz_fs_Stat_ctime(buf).tv_sec)
+      local timespec = ffi.C.zz_fs_Stat_ctime(buf)
+      return tonumber(timespec.tv_sec) + tonumber(timespec.tv_nsec)/1000000000
    end,
 }
 
