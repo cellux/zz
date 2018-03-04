@@ -240,6 +240,12 @@ compile_main() {
   } > /dev/null # only errors should be shown from these steps
 }
 
+jit_modules() {
+  for f in $(cd $LUAJIT_SRC/jit && ls *.lua); do
+    echo "${f%.lua}"
+  done
+}
+
 package_modules() {
   # list of modules defined in this package
   for m in "${PACKAGE_MODULES[@]}"; do
@@ -252,6 +258,8 @@ test_modules() {
   for m in "${PACKAGE_MODULES[@]}"; do
     [ -e "${m}_test.lua" ] && echo "${m}_test"
   done
+  # jit is a cuckoo's egg
+  echo "jit_test"
 }
 
 package_libs() {
@@ -319,6 +327,22 @@ update_archive() {
   fi
 }
 
+build_jit_modules() {
+  mkdir -p "$OBJDIR/jit"
+  local -a objs
+  for m in $(jit_modules); do
+    local m_src="$LUAJIT_SRC/jit/$m.lua"
+    local m_obj="$OBJDIR/jit/$m.lo"
+    if [ $m_src -nt $m_obj ]; then
+      # jit module names are not mangled
+      compile_lua "$m_src" "$m_obj" "jit.$m"
+    fi
+    objs+=($m_obj)
+  done
+  # these belong to libluajit.a
+  update_archive luajit "${objs[@]}"
+}
+
 build_modules() {
   for m in $(package_modules) package; do
     compile_module $m
@@ -366,6 +390,7 @@ build_native() {
 
 do_build() {
   build_native
+  build_jit_modules
   build_modules
   build_apps
 }
@@ -377,6 +402,7 @@ do_install() {
 
 do_test() {
   build_native
+  build_jit_modules
   build_modules
   build_test_modules
   {
