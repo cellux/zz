@@ -412,6 +412,16 @@ local function test_touch()
    process.umask(old_umask)
 end
 
+local function test_glob()
+   assert.equals(fs.glob("testdata/*.jpg"), {
+     "testdata/arborescence.jpg"
+   })
+   assert.equals(fs.glob("testdata/*.txt"), {
+     "testdata/hello.txt",
+     "testdata/www.google.com.txt"
+   })
+end
+
 local function test()
    test_read()
    test_seek()
@@ -432,6 +442,7 @@ local function test()
    test_mkdir()
    test_mkpath()
    test_touch()
+   test_glob()
 end
 
 -- async

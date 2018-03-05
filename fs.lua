@@ -89,6 +89,50 @@ DIR *opendir(const char *path);
 struct dirent * readdir (DIR *dir);
 int closedir (DIR *dir);
 
+/* glob flags */
+enum {
+  GLOB_ERR         = (1 << 0),  /* Return on read errors.  */
+  GLOB_MARK        = (1 << 1),  /* Append a slash to each name.  */
+  GLOB_NOSORT      = (1 << 2),  /* Don't sort the names.  */
+  GLOB_DOOFFS      = (1 << 3),  /* Insert PGLOB->gl_offs NULLs.  */
+  GLOB_NOCHECK     = (1 << 4),  /* If nothing matches, return the pattern.  */
+  GLOB_APPEND      = (1 << 5),  /* Append to results of a previous call.  */
+  GLOB_NOESCAPE    = (1 << 6),  /* Backslashes don't quote metacharacters.  */
+  GLOB_PERIOD      = (1 << 7),  /* Leading `.' can be matched by metachars.  */
+  GLOB_MAGCHAR     = (1 << 8),  /* Set in gl_flags if any metachars seen.  */
+  GLOB_ALTDIRFUNC  = (1 << 9),  /* Use gl_opendir et al functions.  */
+  GLOB_BRACE       = (1 << 10), /* Expand "{a,b}" to "a" "b".  */
+  GLOB_NOMAGIC     = (1 << 11), /* If no magic chars, return the pattern.  */
+  GLOB_TILDE       = (1 << 12), /* Expand ~user and ~ to home directories. */
+  GLOB_ONLYDIR     = (1 << 13), /* Match only directories.  */
+  GLOB_TILDE_CHECK = (1 << 14)  /* Like GLOB_TILDE but return an error
+                                   if the user name is not available.  */
+};
+
+/* glob errors */
+enum {
+  GLOB_NOSPACE = 1, /* Ran out of memory.  */
+  GLOB_ABORTED = 2, /* Read error.         */
+  GLOB_NOMATCH = 3, /* No matches found.   */
+  GLOB_NOSYS   = 4  /* Not implemented.    */
+};
+
+typedef struct {
+  size_t gl_pathc;  /* Count of paths matched by the pattern.  */
+  char **gl_pathv;  /* List of matched pathnames.  */
+  size_t gl_offs;   /* Slots to reserve in `gl_pathv'.  */
+  int gl_flags;     /* Set to FLAGS, maybe | GLOB_MAGCHAR.  */
+
+  void   (*gl_closedir) (void *);
+  void * (*gl_readdir)  (void *);
+  void * (*gl_opendir)  (const char *);
+  int    (*gl_lstat)    (const char *, void *);
+  int    (*gl_stat)     (const char *, void *);
+} glob_t;
+
+int glob (const char *pattern, int flags, int (*errfunc) (const char *, int), glob_t *pglob);
+void globfree (glob_t *pglob);
+
 char * zz_fs_dirent_name(struct dirent *);
 
 const char * zz_fs_type(__mode_t mode);
@@ -686,6 +730,26 @@ function M.mkpath(path)
          M.mkdir(dir)
       end
    end
+end
+
+function M.glob(pattern, flags)
+   flags = bit.bor(flags or 0,
+                   ffi.C.GLOB_ERR,
+                   ffi.C.GLOB_BRACE,
+                   ffi.C.GLOB_TILDE_CHECK)
+   local pglob, block_size = mm.get_block("glob_t")
+   local status = ffi.C.glob(pattern, flags, nil, pglob)
+   local rv = {}
+   if status == 0 then
+      for i=1,pglob.gl_pathc do
+         table.insert(rv, ffi.string(pglob.gl_pathv[i-1]))
+      end
+   elseif status ~= ffi.C.GLOB_NOMATCH then
+      ef("glob failed")
+   end
+   ffi.C.globfree(pglob)
+   mm.ret_block(pglob, block_size)
+   return rv
 end
 
 return setmetatable(M, { __index = ffi.C })
