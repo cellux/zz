@@ -35,6 +35,7 @@ PACKAGE_MODULES=(
   trigger
   uri
   util
+  zz
 )
 PACKAGE_LIBS=(zz luajit cmp nanomsg)
 PACKAGE_APPS=(zz)
@@ -54,7 +55,7 @@ mkdir -p "$BINDIR"
 TMPDIR="$ZZPATH/tmp/$PACKAGE/$$"
 
 mkdir -p "$TMPDIR"
-trap "rm -rf $TMPDIR" EXIT
+trap "rm -rf '$TMPDIR'" EXIT
 
 LUAJIT_VER="2.1.0-beta3"
 LUAJIT_TGZ="LuaJIT-$LUAJIT_VER.tar.gz"
@@ -150,7 +151,7 @@ build_luajit() {
     run make -C "$LUAJIT_ROOT" clean amalg
   fi
   if [ "$LUAJIT_LIB" -nt "$LIBDIR/$(basename "$LUAJIT_LIB")" ]; then
-    run install -v -t "$LIBDIR" -D -m 0644 "$LUAJIT_LIB"
+    run install -v -t "$LIBDIR" -D -m 0644 -p "$LUAJIT_LIB"
   fi
 }
 
@@ -175,7 +176,7 @@ build_nanomsg() {
     (cd "$NANOMSG_ROOT" && run ctest -G Debug .)
   fi
   if [ "$NANOMSG_LIB" -nt "$LIBDIR/$(basename "$NANOMSG_LIB")" ]; then
-    run install -v -t "$LIBDIR" -D -m 0644 "$NANOMSG_LIB"
+    run install -v -t "$LIBDIR" -D -m 0644 -p "$NANOMSG_LIB"
   fi
 }
 
@@ -360,24 +361,50 @@ build_test_modules() {
     $(test_modules | resolve_objs)
 }
 
+generate_main() {
+  local app="$1"
+  cat <<EOF
+local app_module = require('$(mangle $app)')
+if type(app_module)=='table' and app_module.main then
+  app_module.main()
+end
+EOF
+}
+
+build_module_app() {
+  local app="$1"
+  generate_main $app | compile_main \
+    $(package_libs | resolve_libs)
+}
+
+build_standalone_app() {
+  local app="$1"
+  compile_module $app
+  generate_main $app | compile_main \
+    $(resolve_obj $app) \
+    $(package_libs | resolve_libs)
+}
+
 build_apps() {
   for app in $(package_apps); do
-    compile_module $app
-    {
-      echo "local app_module = require('$(mangle $app)')"
-      echo "if type(app_module)=='table' and app_module.main then"
-      echo "  app_module.main()"
-      echo "end"
-    } | compile_main \
-      $(resolve_obj $app) \
-      $(package_libs | resolve_libs)
+    if package_modules | grep -qFx $app; then
+      build_module_app $app
+    else
+      build_standalone_app $app
+    fi
     install -v -T -m 0755 "$TMPDIR/_main" "$BINDIR/$app"
   done
 }
 
 install_apps() {
   for app in $(package_install); do
-    cp -v "$BINDIR/$app" "$GBINDIR/$app"
+    run cp -v "$BINDIR/$app" "$GBINDIR/$app"
+  done
+}
+
+clean_installed_apps() {
+  for app in $(package_install); do
+    run rm -fv "$GBINDIR/$app"
   done
 }
 
@@ -425,7 +452,11 @@ do_test() {
 }
 
 do_clean() {
-  run rm -rf "$OBJDIR" "$LIBDIR"
+  clean_installed_apps
+  run rm -rf "$BINDIR" "$OBJDIR" "$LIBDIR"
+}
+
+do_nativeclean() {
   [ -e "$LUAJIT_ROOT/Makefile" ] && (cd "$LUAJIT_ROOT" && run make clean)
   [ -e "$CMP_OBJ" ] && run rm -f "$CMP_OBJ"
   [ -e "$NANOMSG_ROOT/Makefile" ] && (cd "$NANOMSG_ROOT" && run make clean)
