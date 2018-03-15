@@ -222,3 +222,17 @@ assert.equals(util.hexstr(buffer.copy("abc")), "616263")
 
 assert.equals(util.oct(777), 511)
 assert.equals(util.oct("777"), 511)
+
+-- extend
+
+assert.equals(util.extend({}, {1,2,3}), {1,2,3})
+assert.equals(util.extend({1,2,3}, {}), {1,2,3})
+assert.equals(util.extend({1,2,3}, nil), {1,2,3})
+assert.equals(util.extend({1,2,3}, {4,5,6}), {1,2,3,4,5,6})
+
+-- map
+
+local function square(x) return x*x end
+assert.equals(util.map(square, {}), {})
+assert.equals(util.map(square, nil), {})
+assert.equals(util.map(square, {3,4,5}), {9,16,25})

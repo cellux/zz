@@ -216,4 +216,23 @@ function M.oct(s)
    return tonumber(tostring(s), 8)
 end
 
+function M.extend(t1, t2)
+   if t2 then
+      for _,v in ipairs(t2) do
+         table.insert(t1, v)
+      end
+   end
+   return t1
+end
+
+function M.map(f, t)
+   local rv = {}
+   if t then
+      for _,v in ipairs(t) do
+         table.insert(rv, f(v))
+      end
+   end
+   return rv
+end
+
 return M
