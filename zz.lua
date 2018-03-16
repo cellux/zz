@@ -4,11 +4,13 @@ local argparser = require('argparser')
 local process = require('process')
 local env = require('env')
 local fs = require('fs')
+local stream = require('stream')
 local re = require('re')
 local inspect = require('inspect')
 local util = require('util')
 local bcsave = require('jit.bcsave')
 local sha1 = require('sha1')
+local ffi = require('ffi')
 
 local verbose -- set in main()
 
@@ -160,7 +162,9 @@ local function PackageDescriptor(package_name)
    pd.depends = pd.depends or {}
    pd.native = pd.native or {}
    pd.modules = pd.modules or {}
-   pd.module_deps = pd.module_deps or {}
+   pd.uses = pd.uses or {}
+   pd.apps = pd.apps or {}
+   pd.install = pd.install or {}
    return pd
 end
 
@@ -216,6 +220,9 @@ function Target:make()
    end
    if my_mtime < max_mtime and self.build then
       log("[BUILD] %s", self.basename)
+      if self.dirname and not fs.exists(self.dirname) then
+         fs.mkpath(self.dirname)
+      end
       self:build(changed)
    end
 end
@@ -261,14 +268,32 @@ end
 
 local BuildContext = util.Class(M)
 
-function BuildContext:create(package_name)
-   local pd = PackageDescriptor(package_name)
+local context_cache = {}
+
+local function get_build_context(package_name)
+   if not package_name or package_name == '.' then
+      local pd_path = find_package_descriptor()
+      if not pd_path then
+         die("no package")
+      end
+      local pd = loadfile(pd_path)()
+      package_name = pd.package
+   end
+   if not context_cache[package_name] then
+      local pd = PackageDescriptor(package_name)
+      context_cache[package_name] = BuildContext(pd)
+   end
+   return context_cache[package_name]
+end
+
+function BuildContext:create(pd)
    local ctx = {
       pd = pd,
       gbindir = fs.join(ZZPATH, "bin"),
       bindir = fs.join(ZZPATH, "bin", pd.package),
       objdir = fs.join(ZZPATH, "obj", pd.package),
       libdir = fs.join(ZZPATH, "lib", pd.package),
+      tmpdir = fs.join(ZZPATH, "tmp", pd.package),
       srcdir = fs.join(ZZPATH, "src", pd.package),
    }
    ctx.nativedir = fs.join(ctx.srcdir, "native")
@@ -291,11 +316,10 @@ end
 
 function BuildContext:get(key, package_name)
    package_name = package_name or self.pd.package
-   local package_ctx_vars = shared_ctx_vars[package_name]
-   if not package_ctx_vars then
-      die("BuildContext:get(%s,%s) failed: unknown package", key, package_name)
+   if not shared_ctx_vars[package_name] then
+      shared_ctx_vars[package_name] = {}
    end
-   return package_ctx_vars[key]
+   return shared_ctx_vars[package_name][key]
 end
 
 function BuildContext:collect(key, modname)
@@ -303,13 +327,16 @@ function BuildContext:collect(key, modname)
    local collected = {}
    local function collect(key, modname)
       if not collected[modname] then
+         pf("collect %s", modname)
          local target = self:get(modname)
          assert(is_target(target))
-         util.extend(rv, target[key])
+         for _,t in ipairs(target:subtargets()) do
+            util.extend(rv, t[key])
+         end
          collected[modname] = true
-         local module_deps = self.pd.module_deps[modname]
-         if module_deps then
-            for _,modname in ipairs(module_deps) do
+         local uses = self.pd.uses[modname]
+         if uses then
+            for _,modname in ipairs(uses) do
                collect(key, modname)
             end
          end
@@ -357,7 +384,7 @@ end
 
 function BuildContext:compile_c(opts)
    with_cwd(opts.cwd, function()
-      local args = { "gcc", "-c" }
+      local args = { "gcc", "-c", "-Wall" }
       util.extend(args, opts.cflags)
       table.insert(args, "-o")
       table.insert(args, target_path(opts.dst))
@@ -403,6 +430,22 @@ function BuildContext:cp(opts)
    end)
 end
 
+function BuildContext:link(opts)
+   local args = {
+      "gcc", 
+      "-o", target_path(opts.dst),
+      "-Wl,--export-dynamic",
+   }
+   table.insert(args, "-Wl,--whole-archive")
+   util.extend(args, target_paths(opts.src))
+   table.insert(args, "-Wl,--no-whole-archive")
+   util.extend(args, opts.ldflags)
+   local status = system(args)
+   if status ~= 0 then
+      die("link failed")
+   end
+end
+
 function BuildContext.Target(ctx, opts)
    return Target(opts)
 end
@@ -413,7 +456,7 @@ function BuildContext.LuaModuleTarget(ctx, opts)
       ef("LuaModuleTarget: missing name")
    end
    local m_src = ctx:Target {
-      dirname = ctx.srcdir,
+      dirname = opts.srcdir or ctx.srcdir,
       basename = sf("%s.lua", modname)
    }
    if not fs.exists(m_src.path) then
@@ -458,12 +501,12 @@ function BuildContext.CModuleTarget(ctx, opts)
       dirname = ctx.objdir,
       basename = sf("%s.o", modname),
       depends = c_obj_depends,
-      cflags = { "-iquote", ctx.srcdir },
       build = function(self)
+         local cflags = { "-iquote", ctx.srcdir }
          ctx:compile_c {
             src = c_src,
             dst = self,
-            cflags = ctx:collect("cflags", modname)
+            cflags = util.extend(cflags, ctx:collect("cflags", modname))
          }
       end
    }
@@ -488,14 +531,18 @@ end
 function BuildContext:native_targets()
    local targets = {}
    for libname, target_factory in target_names(self.pd.native) do
-      if type(target_factory) ~= "function" then
-         ef("invalid target factory for native library %s: %s", libname, target_factory)
+      local basename = sf("lib%s.a", libname)
+      local libtarget = self:get(basename)
+      if not libtarget then
+         if type(target_factory) ~= "function" then
+            ef("invalid target factory for native library %s: %s", libname, target_factory)
+         end
+         local target_opts = {
+            name = libname
+         }
+         libtarget = target_factory(self, target_opts)
+         self:set(basename, libtarget)
       end
-      local target_opts = {
-         name = libname
-      }
-      local libtarget = target_factory(self, target_opts)
-      self:set(libname, libtarget)
       util.extend(targets, libtarget:subtargets())
    end
    return targets
@@ -504,46 +551,176 @@ end
 function BuildContext:module_targets()
    local targets = {}
    for modname, target_factory in target_names(self.pd.modules) do
-      if not target_factory then
-         target_factory = self.ModuleTarget
+      local modtarget = self:get(modname)
+      if not modtarget then
+         target_factory = target_factory or self.ModuleTarget
+         if type(target_factory) ~= "function" then
+            ef("invalid target factory for module %s: %s", modname, target_factory)
+         end
+         local target_opts = {
+            name = modname
+         }
+         modtarget = target_factory(self, target_opts)
+         self:set(modname, modtarget)
       end
-      if type(target_factory) ~= "function" then
-         ef("invalid target factory for module %s: %s", modname, target_factory)
-      end
-      local target_opts = {
-         name = modname
-      }
-      local modtarget = target_factory(self, target_opts)
-      self:set(modname, modtarget)
       util.extend(targets, modtarget:subtargets())
    end
+   local package_target = self:ModuleTarget { name = "package" }
+   util.extend(targets, package_target:subtargets())
    return targets
 end
 
 function BuildContext:library_target()
    local ctx = self
-   local depends = {}
-   util.extend(depends, self:native_targets())
-   util.extend(depends, self:module_targets())
-   return Target {
-      dirname = self.libdir,
-      basename = sf("lib%s.a", self.pd.libname),
+   local basename = sf("lib%s.a", self.pd.libname)
+   local libtarget = self:get(basename)
+   if not libtarget then
+      libtarget = Target {
+         dirname = self.libdir,
+         basename = basename,
+         depends = self:module_targets(),
+         build = function(self, changed)
+            ctx:ar {
+               dst = self,
+               src = changed
+            }
+         end
+      }
+      ctx:set(basename, libtarget)
+   end
+   return libtarget
+end
+
+function BuildContext:link_targets()
+   local targets = { self:library_target() }
+   util.extend(targets, self:native_targets())
+   for _,pkg in ipairs(self.pd.depends) do
+      util.extend(targets, get_build_context(pkg):link_targets())
+   end
+   return targets
+end
+
+function BuildContext:ldflags()
+   local ldflags = {}
+   util.extend(ldflags, self.pd.ldflags)
+   for _,pkg in ipairs(self.pd.depends) do
+      util.extend(ldflags, get_build_context(pkg):ldflags())
+   end
+   return ldflags
+end
+
+function BuildContext:build_main_for(appname)
+   local main_tpl_c = self:Target {
+      dirname = self.srcdir,
+      basename = "_main.tpl.c"
+   }
+   local main_c = self:Target {
+      dirname = self.tmpdir,
+      basename = "_main.c"
+   }
+   self:cp {
+      src = main_tpl_c,
+      dst = main_c
+   }
+   local main_o = self:Target {
+      dirname = self.objdir,
+      basename = "_main.o"
+   }
+   self:compile_c {
+      src = main_c,
+      dst = main_o,
+      cflags = self:get("libluajit.a").cflags
+   }
+   local main_tpl_lua = self:Target {
+      dirname = self.srcdir,
+      basename = "_main.tpl.lua"
+   }
+   local main_lua = self:Target {
+      dirname = self.tmpdir,
+      basename = "_main.lua"
+   }
+   local f = fs.open(main_lua.path, bit.bor(ffi.C.O_WRONLY))
+   f:write(sf("PACKAGE = '%s'\n", self.pd.package))
+   f:write(fs.readfile(main_tpl_lua.path))
+   f:write([[
+local app_module = require(']]..appname..[[')
+if type(app_module)=='table' and app_module.main then
+  app_module.main()
+end
+]])
+   f:close()
+   local main_lo = self:Target {
+      dirname = self.objdir,
+      basename = "_main.lo"
+   }
+   self:compile_lua {
+      src = main_lua,
+      dst = main_lo,
+      name = '_main'
+   }
+   local depends = { main_o, main_lo }
+   return self:Target {
       depends = depends,
-      build = function(self, changed)
-         ctx:ar {
-            dst = self,
-            src = changed
-         }
+      subtargets = function()
+         return depends
       end
    }
 end
 
+function BuildContext:app_targets()
+   local ctx = self
+   local targets = {}
+   for _,appname in ipairs(self.pd.apps) do
+      local depends = { self:library_target() }
+      local link_targets = self:link_targets()
+      -- has it been already built as a module?
+      local modtarget = self:get(appname)
+      if not modtarget then
+         -- nope: we shall build it separately
+         modtarget = self:ModuleTarget {
+            name = appname
+         }
+         -- and add it to dependencies / link targets
+         table.insert(depends, modtarget)
+         util.extend(link_targets, modtarget:subtargets())
+      end
+      local apptarget = self:Target {
+         name = appname,
+         dirname = self.bindir,
+         basename = appname,
+         depends = depends,
+         build = function(self)
+            local maintarget = ctx:build_main_for(appname)
+            util.extend(link_targets, maintarget:subtargets())
+            ctx:link {
+               dst = self,
+               src = link_targets,
+               ldflags = ctx:ldflags()
+            }
+         end
+      }
+      table.insert(targets, apptarget)
+   end
+   return targets
+end
+
 function BuildContext:build()
+   for _,pkg in ipairs(self.pd.depends) do
+      get_build_context(pkg):build()
+   end
    fs.mkpath(self.objdir)
    fs.mkpath(self.libdir)
+   fs.mkpath(self.bindir)
+   fs.mkpath(self.tmpdir)
    process.chdir(self.srcdir)
+   for _,native_target in ipairs(self:native_targets()) do
+      native_target:make()
+   end
    local library_target = self:library_target()
    library_target:make()
+   for _,app_target in ipairs(self:app_targets()) do
+      app_target:make()
+   end
 end
 
 function BuildContext:clean()
@@ -641,14 +818,14 @@ function handlers.build(args)
    local ap = argparser()
    ap:add { name = "pkg", type = "string" }
    local args = ap:parse(args)
-   BuildContext(args.pkg):build()
+   get_build_context(args.pkg):build()
 end
 
 function handlers.clean(args)
    local ap = argparser()
    ap:add { name = "pkg", type = "string" }
    local args = ap:parse(args)
-   BuildContext(args.pkg):clean()
+   get_build_context(args.pkg):clean()
 end
 
 function M.main()

@@ -8,7 +8,7 @@ local NANOMSG_VER = "1.1.2"
 
 P.native = {}
 
-P.native.libluajit = function(ctx)
+P.native.luajit = function(ctx)
    local LUAJIT_TGZ = sf("LuaJIT-%s.tar.gz", LUAJIT_VER)
    local LUAJIT_URL = sf("http://luajit.org/download/%s", LUAJIT_TGZ)
    local LUAJIT_DIR = sf("LuaJIT-%s", LUAJIT_VER)
@@ -67,21 +67,49 @@ P.native.libluajit = function(ctx)
          }
       end
    }
+   local jit_modules = {
+      "bcsave"
+   }
+   local depends = { luajit_a }
+   local jit_module_targets = {}
+   for _,jit_module in ipairs(jit_modules) do
+      local jit_mod_lua = ctx:Target {
+         dirname = sf("%s/%s", LUAJIT_SRC, "jit"),
+         basename = sf("%s.lua", jit_module)
+      }
+      local jit_mod_lo = ctx:Target {
+         dirname = sf("%s/%s", ctx.objdir, "jit"),
+         basename = sf("%s.lo", jit_module),
+         build = function(self)
+            ctx:compile_lua {
+               src = jit_mod_lua,
+               dst = self,
+               name = sf("jit.%s", jit_module)
+            }
+         end
+      }
+      table.insert(jit_module_targets, jit_mod_lo)
+      table.insert(depends, jit_mod_lo)
+   end
    return ctx:Target {
       dirname = ctx.libdir,
       basename = "libluajit.a",
-      depends = luajit_a,
+      depends = depends,
       cflags = { "-iquote", LUAJIT_SRC },
       build = function(self)
          ctx:cp {
             src = luajit_a,
             dst = self,
          }
+         ctx:ar {
+            dst = self,
+            src = jit_module_targets
+         }
       end
    }
 end
 
-P.native.libcmp = function(ctx)
+P.native.cmp = function(ctx)
    local CMP_TGZ = sf("cmp-%s.tar.gz", CMP_VER)
    local CMP_URL = sf("https://github.com/camgunz/cmp/archive/v%s.tar.gz", CMP_VER)
    local CMP_DIR = sf("cmp-%s", CMP_VER)
@@ -137,7 +165,7 @@ P.native.libcmp = function(ctx)
    }
 end
 
-P.native.libnanomsg = function(ctx)
+P.native.nanomsg = function(ctx)
    local NANOMSG_TGZ = sf("nanomsg-%s.tar.gz", NANOMSG_VER)
    local NANOMSG_URL = sf("https://github.com/nanomsg/nanomsg/archive/%s.tar.gz", NANOMSG_VER)
    local NANOMSG_DIR = sf("nanomsg-%s", NANOMSG_VER)
@@ -252,10 +280,18 @@ P.modules = {
    "zz",
 }
 
-P.module_deps = {
+P.uses = {
    async = { "trigger" },
-   msgpack = { "buffer", "libcmp" },
-   signal = { "libnanomsg", "buffer", "msgpack" },
+   msgpack = { "buffer", "libcmp.a" },
+   signal = { "libnanomsg.a", "buffer", "msgpack" },
+}
+
+P.ldflags = {
+   "-lc",
+   "-lm",
+   "-ldl",
+   "-lpthread",
+   "-lanl",
 }
 
 P.apps = {
