@@ -398,7 +398,7 @@ build_apps() {
 
 install_apps() {
   for app in $(package_install); do
-    run cp -v "$BINDIR/$app" "$GBINDIR/$app"
+    run ln -sfvT "$BINDIR/$app" "$GBINDIR/$app"
   done
 }
 

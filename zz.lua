@@ -430,6 +430,17 @@ function BuildContext:cp(opts)
    end)
 end
 
+function BuildContext:symlink(opts)
+   with_cwd(opts.cwd, function()
+      local src = target_path(opts.src)
+      local dst = target_path(opts.dst)
+      if fs.exists(dst) then
+         fs.unlink(dst)
+      end
+      fs.symlink(src, dst)
+   end)
+end
+
 function BuildContext:link(opts)
    local args = {
       "gcc", 
@@ -723,6 +734,16 @@ function BuildContext:build()
    end
 end
 
+function BuildContext:install()
+   self:build()
+   for _,app_target in ipairs(self:app_targets()) do
+      self:symlink {
+         src = app_target,
+         dst = fs.join(self.gbindir, app_target.name)
+      }
+   end
+end
+
 function BuildContext:clean()
    system { "rm", "-rf", self.bindir }
    system { "rm", "-rf", self.objdir }
@@ -819,6 +840,13 @@ function handlers.build(args)
    ap:add { name = "pkg", type = "string" }
    local args = ap:parse(args)
    get_build_context(args.pkg):build()
+end
+
+function handlers.install(args)
+   local ap = argparser()
+   ap:add { name = "pkg", type = "string" }
+   local args = ap:parse(args)
+   get_build_context(args.pkg):install()
 end
 
 function handlers.clean(args)
