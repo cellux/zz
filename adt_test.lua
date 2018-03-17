@@ -124,6 +124,17 @@ assert.equals(l:pop(), "a")
 assert.equals(l:shift(), "c")
 assert(l:empty())
 
+-- List is iterable via ipairs()
+local l = adt.List()
+l:push(5)
+l:push(8)
+l:push(13)
+local items = {}
+for _,v in ipairs(l) do
+   table.insert(items, v)
+end
+assert.equals(items, {5,8,13})
+
 -- OrderedList
 
 local l = adt.OrderedList()

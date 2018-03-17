@@ -81,6 +81,15 @@ function List_mt:itervalues()
    return self:iteritems(function(k,v) return v end)
 end
 
+function List_mt:__ipairs()
+   local function iter(t,i)
+      i = (i or 0) + 1
+      local v = self._items[i]
+      if v then return i,v end
+   end
+   return iter, self._items, nil
+end
+
 function M.List()
    local self = {
       _items = {}
