@@ -4,22 +4,14 @@ local M = {}
 
 local constructors = {}
 
-constructors['string'] = function(value)
-   return tostring(value)
-end
-
-constructors['bool'] = function(value)
-   return true
-end
-
-constructors['number'] = function(value)
-   return tonumber(value)
-end
+constructors['string'] = tostring
+constructors['number'] = tonumber
+constructors['bool'] = function(value) return true end
 
 local function ArgDescriptor(arg_opts)
    local self = arg_opts
    if not self.name then
-      error("argument without a name")
+      ef("argument without a name")
    end
    if not self.type then
       if self.option then
@@ -32,40 +24,42 @@ local function ArgDescriptor(arg_opts)
       ef("invalid type for argument '%s': %s", self.name, self.type)
    end
    if self.option then
-      local m = re.match("^-(\\w)\\|--(\\w+)$", self.option)
-      if m then
+      local m = re.Matcher(self.option)
+      if m:match("^-(\\w)\\|--(\\w+)$") then
          self.option_short = m[1]
          self.option_long = m[2]
+      elseif m:match("^-(\\w)$") then
+         self.option_short = m[1]
+      elseif m:match("^--(\\w+)$") then
+         self.option_long = m[1]
       else
-         local m = re.match("^-(\\w)$", self.option)
-         if m then
-            self.option_short = m[1]
-         else
-            local m = re.match("^--(\\w+)$", self.option)
-            if m then
-               self.option_long = m[1]
-            end
-         end
+         ef("invalid option spec: %s", self.option)
       end
    end
-   function self:is_opt()
+   function self:is_option()
       return self.option and true or false
    end
-   function self:process(args, values, vidx)
+   function self:collect(args, values, vidx)
+      -- process argument at values[vidx]
+      -- store value into args[self.name]
+      -- return number of processed values
       local ctr = constructors[self.type]
-      if self:is_opt() then
-         -- option
+      if self:is_option() then
+         -- option (long or short)
          if self.type == "bool" then
+            -- bool options don't need an extra argument
+            -- simple presence of the option means the value is true
             args[self.name] = true
-            return vidx + 1
+            return 1
          else
+            -- for non-bool options the value is the next argument
             args[self.name] = ctr(values[vidx+1])
-            return vidx + 2
+            return 2
          end
       else
          -- positional parameter
          args[self.name] = ctr(values[vidx])
-         return vidx + 1
+         return 1
       end
    end
    return self
@@ -74,41 +68,44 @@ end
 local function ArgParser(command_name, command_description)
    local self = {}
 
-   descriptors = {
+   local descriptors = {
       option_short = {},
       option_long = {},
       positional = {},
    }
 
-   function self:add_option_descriptor(opt_type, d)
-      local opt_name = d[opt_type]
-      if opt_name then
-         assert(descriptors[opt_type])
-         assert(not descriptors[opt_type][opt_name])
-         descriptors[opt_type][opt_name] = d
+   local function add_option_descriptor(option_type, d)
+      local option_name = d[option_type]
+      if option_name then
+         assert(descriptors[option_type])
+         if descriptors[option_type][option_name] then
+            ef("double definition for option: %s", option_name)
+         end
+         descriptors[option_type][option_name] = d
       end
    end
 
    function self:add(arg_opts)
       local descriptor = ArgDescriptor(arg_opts)
-      if descriptor:is_opt() then
-         self:add_option_descriptor('option_short', descriptor)
-         self:add_option_descriptor('option_long', descriptor)
+      if descriptor:is_option() then
+         -- only those will be added which are actually defined
+         add_option_descriptor('option_short', descriptor)
+         add_option_descriptor('option_long', descriptor)
       else
          table.insert(descriptors.positional, descriptor)
       end
    end
 
-   local function is_opt(value)
+   local function is_option(value)
       return value:sub(1,1) == '-'
    end
 
-   local function is_long_opt(value)
+   local function is_long_option(value)
       return value:sub(1,2) == '--'
    end
 
-   local function opt_name(value)
-      if is_long_opt(value) then
+   local function option_name(value)
+      if is_long_option(value) then
          return value:sub(3)
       else
          return value:sub(2)
@@ -116,30 +113,32 @@ local function ArgParser(command_name, command_description)
    end
 
    function self:parse(values)
+      -- the runtime stores command line args into _G.arg
       values = values or _G.arg
       local args = {}
       local rest = {}
-      -- set flags to their default value
-      local function init_flags(ds)
+      -- set bool options to their default values
+      local function init_options(ds)
          for _,d in pairs(ds) do
-            if d:is_opt() and d.type=="bool" then
+            if d.type=="bool" then
                args[d.name] = d.default or false
             end
          end
       end
-      init_flags(descriptors.option_short)
-      init_flags(descriptors.option_long)
-      -- process values
+      init_options(descriptors.option_short)
+      init_options(descriptors.option_long)
+      -- collect values
       local vidx = 1
       local pidx = 1
       while vidx <= #values do
          local value = values[vidx]
          local descriptor
-         if is_opt(value) then
-            if is_long_opt(value) then
-               descriptor = descriptors.option_long[opt_name(value)]
+         if is_option(value) then
+            local name = option_name(value)
+            if is_long_option(value) then
+               descriptor = descriptors.option_long[name]
             else
-               descriptor = descriptors.option_short[opt_name(value)]
+               descriptor = descriptors.option_short[name]
             end
          else
             descriptor = descriptors.positional[pidx]
@@ -148,7 +147,7 @@ local function ArgParser(command_name, command_description)
             end
          end
          if descriptor then
-            vidx = descriptor:process(args, values, vidx)
+            vidx = vidx + descriptor:collect(args, values, vidx)
          else
             table.insert(rest, value)
             vidx = vidx + 1
