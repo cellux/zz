@@ -127,4 +127,17 @@ function M.match(pattern, subject, startoffset, options)
    return M.compile(pattern):match(subject, startoffset, options)
 end
 
+function M.Matcher(subject)
+   local self = {}
+   local match
+   function self:match(pattern)
+      match = M.compile(pattern):match(subject)
+      return match
+   end
+   function self:at(i)
+      return match[i]
+   end
+   return setmetatable(self, { __index = self.at })
+end
+
 return M
