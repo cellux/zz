@@ -13,17 +13,17 @@ local function setup_require(pname, seen)
    seen[pname] = true
    local pd = require(mangle(pname, 'package')) -- package descriptor
    local loaders = {}
-   if pd.depends then
-      for _,dname in ipairs(pd.depends) do
+   if pd.imports then
+      for _,dname in ipairs(pd.imports) do
          local dd = require(mangle(dname, 'package'))
-         for _,m in ipairs(dd.modules) do
+         for _,m in ipairs(dd.exports) do
             local m_loader = function() return dd.require(m) end
             loaders[m] = m_loader
             loaders[dname..'/'..m] = m_loader
          end
       end
    end
-   for _,m in ipairs(pd.modules) do
+   for _,m in ipairs(pd.exports) do
       local m_mangled = mangle(pname, m)
       local m_loader = function() return lj_require(m_mangled) end
       loaders[m] = m_loader
@@ -34,8 +34,8 @@ local function setup_require(pname, seen)
       return loader(m)
    end
    setfenv(pd.require, setmetatable({ require = pd.require }, { __index = _G }))
-   if pd.depends then
-      for _,dname in ipairs(pd.depends) do
+   if pd.imports then
+      for _,dname in ipairs(pd.imports) do
          setup_require(dname, seen)
       end
    end
