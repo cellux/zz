@@ -273,6 +273,7 @@ end
 function BuildContext:create(pd)
    local ctx = {
       pd = pd,
+      vars = {},
       gbindir = fs.join(ZZPATH, "bin"),
       bindir = fs.join(ZZPATH, "bin", pd.package),
       objdir = fs.join(ZZPATH, "obj", pd.package),
@@ -289,21 +290,12 @@ function BuildContext:mangle(name)
    return 'zz_'..sha1(sf("%s/%s", self.pd.package, name))
 end
 
-local shared_context_vars = {}
-
 function BuildContext:set(key, value)
-   local package_name = self.pd.package
-   if not shared_context_vars[package_name] then
-      shared_context_vars[package_name] = {}
-   end
-   shared_context_vars[package_name][key] = value
+   self.vars[key] = value
 end
 
-function BuildContext:get(key, package_name)
-   package_name = package_name or self.pd.package
-   if shared_context_vars[package_name] then
-      return shared_context_vars[package_name][key]
-   end
+function BuildContext:get(key)
+   return self.vars[key]
 end
 
 -- this one still feels ugly
