@@ -12,6 +12,8 @@ local sha1 = require('sha1')
 local ffi = require('ffi')
 local adt = require('adt')
 
+local ZZ_CORE_PACKAGE = "github.com/cellux/zz"
+
 local quiet = false
 
 local function log(msg, ...)
@@ -114,6 +116,15 @@ local function find_package_descriptor()
    return found and pd_path or nil
 end
 
+local function contains(t, x)
+   for _,v in ipairs(t) do
+      if v == x then
+         return true
+      end
+   end
+   return false
+end
+
 local function PackageDescriptor(package_name)
    local pd, pd_path
    if not package_name or package_name == '.' then
@@ -138,6 +149,9 @@ local function PackageDescriptor(package_name)
    pd.libname = pd.libname or fs.basename(pd.package)
    -- external zz packages used by this package
    pd.imports = pd.imports or {}
+   if pd.package ~= ZZ_CORE_PACKAGE and not contains(pd.imports, ZZ_CORE_PACKAGE) then
+      table.insert(pd.imports, ZZ_CORE_PACKAGE)
+   end
    -- native C libraries used by this package
    pd.native = pd.native or {}
    -- modules exported by this package (Lua/C)
@@ -578,8 +592,9 @@ function BuildContext:ldflags()
 end
 
 function BuildContext:build_main(appname)
+   local zzctx = get_build_context(ZZ_CORE_PACKAGE)
    local main_tpl_c = self:Target {
-      dirname = self.srcdir,
+      dirname = zzctx.srcdir,
       basename = "_main.tpl.c"
    }
    local main_c = self:Target {
@@ -597,10 +612,10 @@ function BuildContext:build_main(appname)
    self:compile_c {
       src = main_c,
       dst = main_o,
-      cflags = self:collect("cflags", "libluajit.a")
+      cflags = zzctx:collect("cflags", "libluajit.a")
    }
    local main_tpl_lua = self:Target {
-      dirname = self.srcdir,
+      dirname = zzctx.srcdir,
       basename = "_main.tpl.lua"
    }
    local main_lua = self:Target {
@@ -653,7 +668,7 @@ function BuildContext:app_targets()
          dirname = self.bindir,
          basename = appname,
          depends = {
-            self:library_target(),
+            ctx:link_targets(),
             app_module_targets
          },
          build = function(self)
