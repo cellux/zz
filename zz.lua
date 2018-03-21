@@ -12,10 +12,10 @@ local sha1 = require('sha1')
 local ffi = require('ffi')
 local adt = require('adt')
 
-local verbose -- set in main()
+local quiet = false
 
 local function log(msg, ...)
-   if verbose then
+   if not quiet then
       pf(sf(msg, ...))
    end
 end
@@ -828,7 +828,7 @@ function M.main()
    if not args.command then
       usage()
    end
-   verbose = args.verbose
+   quiet = args.quiet
    local handler = handlers[args.command]
    if not handler then
       die("Invalid command: %s", args.command)
