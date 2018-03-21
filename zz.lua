@@ -167,7 +167,6 @@ local function flatten(targets)
             add(t)
          end
       end
-      -- anything else is filtered out
    end
    add(targets)
    return rv
