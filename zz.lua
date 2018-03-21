@@ -814,7 +814,7 @@ end
 function M.main()
    local ap = argparser("zz", "zz build tool")
    ap:add { name = "command", type = "string" }
-   ap:add { name = "verbose", option = "-v|--verbose" }
+   ap:add { name = "quiet", option = "-q|--quiet" }
    local args, rest_args = ap:parse()
    if not args.command then
       usage()
