@@ -228,6 +228,14 @@ end
 function M.map(f, t)
    local rv = {}
    if t then
+      if type(f) == "string" then
+         -- each element in t is a table
+         -- map to the value at key f
+         local key = f
+         f = function(item) 
+            return item[key]
+         end
+      end
       for _,v in ipairs(t) do
          table.insert(rv, f(v))
       end

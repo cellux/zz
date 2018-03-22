@@ -236,3 +236,12 @@ local function square(x) return x*x end
 assert.equals(util.map(square, {}), {})
 assert.equals(util.map(square, nil), {})
 assert.equals(util.map(square, {3,4,5}), {9,16,25})
+
+local t = {
+   { name = "John", age = 11 },
+   { name = "Jack", age = 22 },
+   { name = "Doug", age = 33 },
+}
+
+assert.equals(util.map("name", t), { "John", "Jack", "Doug" })
+assert.equals(util.map("age", t), { 11, 22, 33 })
