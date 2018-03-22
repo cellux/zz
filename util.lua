@@ -243,4 +243,11 @@ function M.map(f, t)
    return rv
 end
 
+function M.reduce(f, t, acc)
+   for _,v in ipairs(t) do
+      acc = f(acc, v)
+   end
+   return acc
+end
+
 return M

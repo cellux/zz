@@ -245,3 +245,8 @@ local t = {
 
 assert.equals(util.map("name", t), { "John", "Jack", "Doug" })
 assert.equals(util.map("age", t), { 11, 22, 33 })
+
+-- reduce
+
+assert.equals(15, util.reduce(function(sum,x) return sum+x end, {1,2,3,4,5}, 0))
+assert.equals(21, util.reduce(function(sum,x) return sum+x end, {1,2,3,4,5}, 6))
