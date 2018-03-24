@@ -785,9 +785,21 @@ function BuildContext:test(test_names)
 end
 
 function BuildContext:clean()
-   --system { "rm", "-rf", self.bindir }
    system { "rm", "-rf", self.objdir }
    system { "rm", "-rf", self.libdir }
+end
+
+function BuildContext:distclean()
+   self:clean()
+   local installed_apps = util.filter(fs.is_lnk, fs.glob(fs.join(self.gbindir,"*")))
+   for _,app in ipairs(installed_apps) do
+      if fs.dirname(fs.realpath(app)) == self.bindir then
+         log("unlink: %s", app)
+         fs.unlink(app)
+      end
+   end
+   system { "rm", "-rf", self.bindir }
+   system { "rm", "-rf", self.nativedir }
 end
 
 local function parse_package_name(package_name)
@@ -897,6 +909,13 @@ function handlers.clean(args)
    ap:add { name = "pkg", type = "string" }
    local args = ap:parse(args)
    get_build_context(args.pkg):clean()
+end
+
+function handlers.distclean(args)
+   local ap = argparser()
+   ap:add { name = "pkg", type = "string" }
+   local args = ap:parse(args)
+   get_build_context(args.pkg):distclean()
 end
 
 function M.main()
