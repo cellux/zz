@@ -899,9 +899,8 @@ end
 
 function handlers.test(args)
    local ap = argparser()
-   ap:add { name = "pkg", type = "string" }
    local args, test_names = ap:parse(args)
-   get_build_context(args.pkg):test(test_names)
+   get_build_context():test(test_names)
 end
 
 function handlers.clean(args)
