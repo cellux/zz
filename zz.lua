@@ -689,10 +689,10 @@ function BuildContext:app_targets()
          },
          build = function(self)
             local main_targets = ctx:build_main([[
-              local app_module = require(']]..appname..[[')
-              if type(app_module)=='table' and app_module.main then
-                app_module.main()
-              end
+               local app_module = require(']]..appname..[[')
+               if type(app_module)=='table' and app_module.main then
+                  app_module.main()
+               end
             ]])
             ctx:link {
                dst = self,
@@ -733,6 +733,40 @@ function BuildContext:install()
          dst = fs.join(self.gbindir, app_target.basename)
       }
    end
+end
+
+function BuildContext:run(appname)
+   self:build()
+   if appname:sub(-4) == ".lua" then
+      appname = appname:sub(1,-5)
+   end
+   local app_targets = self:lua_c_module_targets(appname)
+   if not app_targets then
+      die("cannot build app target: %s", appname)
+   end
+   for _,t in ipairs(app_targets) do
+      t:make()
+   end
+   local main_targets = self:build_main([[
+      local app_module = require(']]..appname..[[')
+      if type(app_module)=='table' and app_module.main then
+         app_module.main()
+      end
+   ]])
+   local app = self:Target {
+      dirname = self.tmpdir,
+      basename = appname
+   }
+   self:link {
+      dst = app,
+      src = {
+         self:link_targets(),
+         app_targets,
+         main_targets
+      },
+      ldflags = self:ldflags()
+   }
+   system { app.path }
 end
 
 function BuildContext:find_tests()
@@ -895,6 +929,16 @@ function handlers.install(args)
    ap:add { name = "pkg", type = "string" }
    local args = ap:parse(args)
    get_build_context(args.pkg):install()
+end
+
+function handlers.run(args)
+   local ap = argparser()
+   ap:add { name = "appname", type = "string" }
+   local args = ap:parse(args)
+   if not args.appname then
+      die("missing appname")
+   end
+   get_build_context():run(args.appname)
 end
 
 function handlers.test(args)
