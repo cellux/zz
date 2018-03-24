@@ -735,6 +735,55 @@ function BuildContext:install()
    end
 end
 
+function BuildContext:find_tests()
+   local function strip(test_path)
+      local basename = fs.basename(test_path)
+      local testname = basename:sub(1,-5) -- strip ".lua" extension
+      return testname
+   end
+   return util.map(strip, fs.glob(fs.join(self.srcdir, "*_test.lua")))
+end
+
+function BuildContext:test(test_names)
+   self:build()
+   if not test_names or #test_names == 0 then
+      test_names = self:find_tests()
+   else
+      local function sanitize(testname)
+         if testname:sub(-5) ~= "_test" then
+            testname = testname .. "_test"
+         end
+         return testname
+      end
+      test_names = util.map(sanitize, test_names)
+   end
+   local test_targets = {}
+   local bootstrap = {}
+   for _,modname in ipairs(test_names) do
+      for _,t in ipairs(self:lua_c_module_targets(modname)) do
+         assert(is_target(t))
+         t:make()
+         table.insert(test_targets, t)
+      end
+      table.insert(bootstrap, sf("require_test('%s')\n", modname))
+   end
+   local main_targets = self:build_main(table.concat(bootstrap))
+   local test_app = self:Target {
+      dirname = self.tmpdir,
+      basename = sf("%s_test", self.pd.libname)
+   }
+   self:link {
+      dst = test_app,
+      src = {
+         self:link_targets(),
+         test_targets,
+         main_targets
+      },
+      ldflags = self:ldflags()
+   }
+   system { test_app.path }
+end
+
 function BuildContext:clean()
    --system { "rm", "-rf", self.bindir }
    system { "rm", "-rf", self.objdir }
@@ -836,6 +885,13 @@ function handlers.install(args)
    get_build_context(args.pkg):install()
 end
 
+function handlers.test(args)
+   local ap = argparser()
+   ap:add { name = "pkg", type = "string" }
+   local args, test_names = ap:parse(args)
+   get_build_context(args.pkg):test(test_names)
+end
+
 function handlers.clean(args)
    local ap = argparser()
    ap:add { name = "pkg", type = "string" }
@@ -844,7 +900,7 @@ function handlers.clean(args)
 end
 
 function M.main()
-   local ap = argparser("zz", "zz build tool")
+   local ap = argparser("zz", "zz build system")
    ap:add { name = "command", type = "string" }
    ap:add { name = "quiet", option = "-q|--quiet" }
    local args, rest_args = ap:parse()
