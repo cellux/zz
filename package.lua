@@ -77,7 +77,7 @@ P.native.luajit = function(ctx)
             ctx:compile_lua {
                src = m_lua,
                dst = self,
-               name = sf("jit.%s", m)
+               sym = sf("jit.%s", m)
             }
          end
       }
