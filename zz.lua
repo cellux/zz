@@ -653,7 +653,7 @@ function BuildContext:build_main(bootstrap_code)
       dirname = self.tmpdir,
       basename = "_main.lua"
    }
-   local f = fs.open(main_lua.path, bit.bor(ffi.C.O_WRONLY))
+   local f = fs.open(main_lua.path, bit.bor(ffi.C.O_WRONLY, ffi.C.O_TRUNC))
    f:write(sf("local PACKAGE = '%s'\n", self.pd.package))
    f:write(fs.readfile(main_tpl_lua.path))
    f:write(bootstrap_code)
