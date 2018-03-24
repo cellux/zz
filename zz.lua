@@ -931,6 +931,19 @@ function handlers.install(args)
    get_build_context(args.pkg):install()
 end
 
+function handlers.get(args)
+   local ap = argparser()
+   ap:add { name = "pkg", type = "string" }
+   ap:add { name = "update", option = "-u|--update" }
+   local args = ap:parse(args)
+   if args.pkg then
+      checkout(args.pkg, args.update)
+      get_build_context(args.pkg):install()
+   else
+      die("Missing argument: pkg")
+   end
+end
+
 function handlers.run(args)
    local ap = argparser()
    ap:add { name = "appname", type = "string" }
