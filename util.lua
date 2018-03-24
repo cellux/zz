@@ -250,6 +250,18 @@ function M.reduce(f, t, acc)
    return acc
 end
 
+function M.filter(f, t)
+   local rv = {}
+   if t then
+      for _,v in ipairs(t) do
+         if f(v) then
+            table.insert(rv, v)
+         end
+      end
+   end
+   return rv
+end
+
 function M.indexof(x, t)
    local index
    for i,v in ipairs(t) do

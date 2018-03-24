@@ -251,6 +251,18 @@ assert.equals(util.map("age", t), { 11, 22, 33 })
 assert.equals(15, util.reduce(function(sum,x) return sum+x end, {1,2,3,4,5}, 0))
 assert.equals(21, util.reduce(function(sum,x) return sum+x end, {1,2,3,4,5}, 6))
 
+-- filter
+local function even(x)
+   return x % 2 == 0
+end
+local function odd(x)
+   return not even(x)
+end
+assert.equals(util.filter(even, nil), {})
+assert.equals(util.filter(even, {}), {})
+assert.equals(util.filter(even, {1,2,3,4,5}), {2,4})
+assert.equals(util.filter(odd, {1,2,3,4,5}), {1,3,5})
+
 -- indexof
 assert.equals(nil, util.indexof('x',{}))
 assert.equals(nil, util.indexof('x',{'a','b','c','d','e','f'}))
