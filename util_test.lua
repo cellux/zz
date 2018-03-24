@@ -250,3 +250,17 @@ assert.equals(util.map("age", t), { 11, 22, 33 })
 
 assert.equals(15, util.reduce(function(sum,x) return sum+x end, {1,2,3,4,5}, 0))
 assert.equals(21, util.reduce(function(sum,x) return sum+x end, {1,2,3,4,5}, 6))
+
+-- indexof
+assert.equals(nil, util.indexof('x',{}))
+assert.equals(nil, util.indexof('x',{'a','b','c','d','e','f'}))
+assert.equals(1, util.indexof('a',{'a','b','c','d','e','f'}))
+assert.equals(4, util.indexof('d',{'a','b','c','d','e','f'}))
+assert.equals(6, util.indexof('f',{'a','b','c','d','e','f'}))
+
+-- contains
+assert(not util.contains('x',{}))
+assert(not util.contains('x',{'a','b','c','d','e','f'}))
+assert(util.contains('a',{'a','b','c','d','e','f'}))
+assert(util.contains('d',{'a','b','c','d','e','f'}))
+assert(util.contains('f',{'a','b','c','d','e','f'}))

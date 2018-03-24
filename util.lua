@@ -250,4 +250,19 @@ function M.reduce(f, t, acc)
    return acc
 end
 
+function M.indexof(x, t)
+   local index
+   for i,v in ipairs(t) do
+      if v == x then
+         index = i
+         break
+      end
+   end
+   return index
+end
+
+function M.contains(x, t)
+   return M.indexof(x, t) ~= nil
+end
+
 return M
