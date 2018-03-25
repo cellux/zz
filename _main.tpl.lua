@@ -11,18 +11,26 @@ local lj_require = _G.require
 local function setup_require(pname, seen)
    if seen[pname] then return end
    seen[pname] = true
-   local pd = require(mangle(pname, 'package')) -- package descriptor
+   local pd = lj_require(mangle(pname, 'package')) -- package descriptor
    local loaders = {}
-   if pd.imports then
-      for _,dname in ipairs(pd.imports) do
-         local dd = require(mangle(dname, 'package'))
+   pd.imports = pd.imports or {}
+   -- ZZ_CORE_PACKAGE is injected by the build system
+   table.insert(pd.imports, ZZ_CORE_PACKAGE)
+   local imports_seen = {}
+   for _,dname in ipairs(pd.imports) do
+      if not imports_seen[dname] then
+         setup_require(dname, seen) -- generates dd.require()
+         local dd = lj_require(mangle(dname, 'package'))
+         dd.exports = dd.exports or {}
          for _,m in ipairs(dd.exports) do
             local m_loader = function() return dd.require(m) end
             loaders[m] = m_loader
             loaders[dname..'/'..m] = m_loader
          end
+         imports_seen[dname] = true
       end
    end
+   pd.exports = pd.exports or {}
    for _,m in ipairs(pd.exports) do
       local m_mangled = mangle(pname, m)
       local m_loader = function() return lj_require(m_mangled) end
@@ -30,20 +38,14 @@ local function setup_require(pname, seen)
       loaders[pname..'/'..m] = m_loader
    end
    pd.require = function(m)
-      local loader = loaders[m] or lj_require
-      return loader(m)
+      return (loaders[m] or lj_require)(m)
    end
    setfenv(pd.require, setmetatable({ require = pd.require }, { __index = _G }))
-   if pd.imports then
-      for _,dname in ipairs(pd.imports) do
-         setup_require(dname, seen)
-      end
-   end
    return pd.require
 end
 
--- PACKAGE is injected by the build system
-_G.require = setup_require(PACKAGE, {})
+-- ZZ_PACKAGE is injected by the build system
+_G.require = setup_require(ZZ_PACKAGE, {})
 
 require('globals')
 

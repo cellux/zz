@@ -240,14 +240,14 @@ function Target:collect(key)
    return rv
 end
 
-function Target:make()
+function Target:make(force)
    local my_mtime = self:mtime()
    local changed = {} -- list of updated dependencies
    local max_mtime = 0
    self.depends = flatten(self.ctx:resolve_targets(self.depends))
    for _,t in ipairs(self.depends) do
       assert(is_target(t))
-      t:make()
+      t:make(force)
       local mtime = t:mtime()
       if mtime > my_mtime then
          table.insert(changed, t)
@@ -256,7 +256,7 @@ function Target:make()
          max_mtime = mtime
       end
    end
-   if my_mtime < max_mtime and self.build then
+   if (my_mtime < max_mtime or force) and self.build then
       log("[BUILD] %s", self.basename)
       if self.dirname then
          fs.mkpath(self.dirname)
@@ -649,50 +649,68 @@ function BuildContext:ldflags()
 end
 
 function BuildContext:build_main(bootstrap_code)
+   local ctx = self
    local zzctx = get_build_context(ZZ_CORE_PACKAGE)
-   local main_tpl_c = self:Target {
+   local main_tpl_c = ctx:Target {
       dirname = zzctx.srcdir,
       basename = "_main.tpl.c"
    }
-   local main_c = self:Target {
-      dirname = self.tmpdir,
-      basename = "_main.c"
+   local main_c = ctx:Target {
+      dirname = ctx.tmpdir,
+      basename = "_main.c",
+      depends = main_tpl_c,
+      build = function(self)
+         ctx:cp {
+            src = main_tpl_c,
+            dst = self
+         }
+      end
    }
-   self:cp {
-      src = main_tpl_c,
-      dst = main_c
+   local main_o = ctx:Target {
+      dirname = ctx.objdir,
+      basename = "_main.o",
+      depends = main_c,
+      build = function(self)
+         ctx:compile_c {
+            src = main_c,
+            dst = self,
+            cflags = zzctx:get("libluajit.a").cflags
+         }
+      end
    }
-   local main_o = self:Target {
-      dirname = self.objdir,
-      basename = "_main.o"
-   }
-   self:compile_c {
-      src = main_c,
-      dst = main_o,
-      cflags = zzctx:get("libluajit.a").cflags
-   }
-   local main_tpl_lua = self:Target {
+   main_o:make(true)
+   local main_tpl_lua = ctx:Target {
       dirname = zzctx.srcdir,
       basename = "_main.tpl.lua"
    }
-   local main_lua = self:Target {
-      dirname = self.tmpdir,
-      basename = "_main.lua"
+   local main_lua = ctx:Target {
+      dirname = ctx.tmpdir,
+      basename = "_main.lua",
+      depends = main_tpl_lua,
+      build = function(self)
+         local f = fs.open(self.path, bit.bor(ffi.C.O_CREAT,
+                                              ffi.C.O_WRONLY,
+                                              ffi.C.O_TRUNC))
+         f:write(sf("local ZZ_PACKAGE = '%s'\n", ctx.pd.package))
+         f:write(sf("local ZZ_CORE_PACKAGE = '%s'\n", ZZ_CORE_PACKAGE))
+         f:write(fs.readfile(main_tpl_lua.path))
+         f:write(bootstrap_code)
+         f:close()
+      end
    }
-   local f = fs.open(main_lua.path, bit.bor(ffi.C.O_WRONLY, ffi.C.O_TRUNC))
-   f:write(sf("local PACKAGE = '%s'\n", self.pd.package))
-   f:write(fs.readfile(main_tpl_lua.path))
-   f:write(bootstrap_code)
-   f:close()
-   local main_lo = self:Target {
-      dirname = self.objdir,
-      basename = "_main.lo"
+   local main_lo = ctx:Target {
+      dirname = ctx.objdir,
+      basename = "_main.lo",
+      depends = main_lua,
+      build = function(self)
+         ctx:compile_lua {
+            src = main_lua,
+            dst = self,
+            sym = '_main'
+         }
+      end
    }
-   self:compile_lua {
-      src = main_lua,
-      dst = main_lo,
-      sym = '_main'
-   }
+   main_lo:make(true)
    return { main_o, main_lo }
 end
 

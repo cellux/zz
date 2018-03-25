@@ -223,7 +223,8 @@ compile_main() {
   # stdin: main program
   cp _main.tpl.c "$TMPDIR/_main.c"
   {
-    echo "local PACKAGE = '$PACKAGE'"
+    echo "local ZZ_PACKAGE = '$PACKAGE'"
+    echo "local ZZ_CORE_PACKAGE = '$PACKAGE'"
     cat _main.tpl.lua
     cat # inject main program
   } > "$TMPDIR/_main.lua"
