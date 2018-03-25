@@ -9,6 +9,21 @@ local buffer = require('buffer')
 local process = require('process')
 local re = require('re')
 local mm = require('mm')
+local ffi = require('ffi')
+
+local tmp_index = 0
+
+local function with_tmpdir(cb)
+   tmp_index = tmp_index + 1
+   local tmpdir = sf("/tmp/fs_test.%d.%d", process.getpid(), tmp_index)
+   assert.equals(0, fs.mkdir(tmpdir))
+   assert(fs.is_dir(tmpdir))
+   local ok, err = pcall(cb, tmpdir)
+   fs.rmpath(tmpdir)
+   if not ok then
+      error(err, 2)
+   end
+end
 
 local function test_read()
    -- read whole file at once
@@ -39,6 +54,14 @@ local function test_read()
    -- further reads return nil
    assert(f:read(4096)==nil)
    f:close()
+end
+
+local function test_write()
+   with_tmpdir(function(tmpdir)
+      local tmp = fs.join(tmpdir, 'arborescence.jpg')
+      fs.writefile(tmp, fs.readfile('testdata/arborescence.jpg'))
+      assert.equals(fs.readfile(tmp), fs.readfile('testdata/arborescence.jpg'))
+   end)
 end
 
 local function test_seek()
@@ -165,8 +188,12 @@ local function test_type()
    
    assert(fs.type("testdata/hello.txt.symlink")=="lnk")
    assert(fs.is_lnk("testdata/hello.txt.symlink"))
-   -- TODO: chr, blk, fifo, sock
-   
+
+   assert(fs.type("/dev/null")=="chr")
+   assert(fs.is_chr("/dev/null"))
+
+   -- TODO: blk, fifo, sock
+
    -- type of symlink pointing to non-existing file is "lnk"
    assert(fs.type("testdata/bad.symlink")=="lnk")
    assert(fs.is_lnk("testdata/bad.symlink"))
@@ -322,33 +349,38 @@ local function test_stream_read()
 end
 
 local function test_stream_write()
-   local fin = fs.open("testdata/arborescence.jpg")
-   local sin = stream(fin)
-   local fout, fout_path = fs.mkstemp("test_stream_write")
-   local sout = stream(fout)
-   while not sin:eof() do
-      sout:write(sin:read())
-      sout:write(sin:read(math.random(1000)))
-   end
-   fout:close()
-   fin:close()
-   assert.equals(fs.readfile("testdata/arborescence.jpg"), fs.readfile(fout_path))
-   fs.unlink(fout_path)
+   with_tmpdir(function(tmpdir)
+      local fin = fs.open("testdata/arborescence.jpg")
+      local sin = stream(fin)
+      local fout_path = fs.join(tmpdir, "test_stream_write")
+      local fout = fs.open(fout_path, bit.bor(ffi.C.O_CREAT, ffi.C.O_RDWR))
+      local sout = stream(fout)
+      while not sin:eof() do
+         sout:write(sin:read())
+         sout:write(sin:read(math.random(1000)))
+      end
+      fout:close()
+      fin:close()
+      assert.equals(fs.readfile("testdata/arborescence.jpg"), fs.readfile(fout_path))
+   end)
 end
 
 local function test_symlink_readlink_realpath()
    local rel = "testdata/arborescence.jpg"
    local abs = fs.realpath(rel)
    assert(abs ~= rel)
+   assert.equals(abs:sub(1,1), "/")
    assert.equals(fs.readfile(abs), fs.readfile(rel))
-   local tmp = sf("/tmp/%s-arborescence.jpg", process.getpid())
-   fs.symlink(abs, tmp)
-   assert(fs.is_lnk(tmp))
-   assert.equals(fs.readlink(tmp), abs)
-   assert.equals(fs.realpath(tmp), abs)
-   assert.equals(fs.realpath(sf("/tmp/../."..tmp)), abs)
-   fs.unlink(tmp)
-   assert(not fs.exists(tmp))
+   with_tmpdir(function(tmpdir)
+      local tmp = fs.join(tmpdir, "arborescence.jpg")
+      fs.symlink(abs, tmp)
+      assert(fs.is_lnk(tmp))
+      assert.equals(fs.readlink(tmp), abs)
+      assert.equals(fs.realpath(tmp), abs)
+      assert.equals(fs.realpath(sf("/tmp/../."..tmp)), abs)
+      fs.unlink(tmp)
+      assert(not fs.exists(tmp))
+   end)
 end
 
 local function test_Path()
@@ -375,41 +407,46 @@ local function test_Path()
    assert.equals(tostring(fs.Path{"abc","def"}), "abc/def")
 end
 
-local function test_mkdir()
-   local tmpdir = sf("/tmp/fs_test_%d", process.getpid())
-   assert.equals(0, fs.mkdir(tmpdir))
-   assert(fs.is_dir(tmpdir))
-   local s = fs.stat(tmpdir)
-   assert.equals(s.perms, bit.band(util.oct("777"), bit.bnot(process.umask())))
-   process.system(sf("rm -rf %s", tmpdir))
+local function test_mkdir_rmdir()
+   with_tmpdir(function(tmpdir)
+      local foo_path = fs.join(tmpdir, "foo")
+      assert.equals(0, fs.mkdir(foo_path))
+      assert(fs.is_dir(foo_path))
+      local s = fs.stat(foo_path)
+      assert.equals(s.perms, bit.band(util.oct("777"), bit.bnot(process.umask())))
+      assert.equals(0, fs.rmdir(foo_path))
+      assert(not fs.is_dir(foo_path))
+      assert(not fs.exists(foo_path))
+   end)
 end
 
-local function test_mkpath()
-   local old_umask = process.umask(util.oct("022"))
-   local tmpdir = sf("/tmp/fs_test_%d", process.getpid())
-   fs.mkdir(tmpdir)
-   local test_path = fs.join(tmpdir, "zsuba/guba/csicseri")
-   fs.mkpath(test_path)
-   assert(fs.is_dir(fs.join(tmpdir, "zsuba")))
-   assert.equals(fs.stat(fs.join(tmpdir, "zsuba")).perms, util.oct("755"))
-   assert(fs.is_dir(fs.join(tmpdir, "zsuba", "guba")))
-   assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba")).perms, util.oct("755"))
-   assert(fs.is_dir(fs.join(tmpdir, "zsuba", "guba", "csicseri")))
-   assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba", "csicseri")).perms, util.oct("755"))
-   process.system(sf("rm -rf %s", tmpdir))
-   process.umask(old_umask)
+local function test_mkpath_rmpath()
+   with_tmpdir(function(tmpdir)
+      local old_umask = process.umask(util.oct("022"))
+      local test_path = fs.join(tmpdir, "zsuba/guba/csicseri")
+      fs.mkpath(test_path)
+      assert(fs.is_dir(fs.join(tmpdir, "zsuba")))
+      assert.equals(fs.stat(fs.join(tmpdir, "zsuba")).perms, util.oct("755"))
+      assert(fs.is_dir(fs.join(tmpdir, "zsuba", "guba")))
+      assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba")).perms, util.oct("755"))
+      assert(fs.is_dir(fs.join(tmpdir, "zsuba", "guba", "csicseri")))
+      assert.equals(fs.stat(fs.join(tmpdir, "zsuba", "guba", "csicseri")).perms, util.oct("755"))
+      fs.rmpath(fs.join(tmpdir, "zsuba"))
+      assert(fs.is_dir(tmpdir))
+      assert(not fs.is_dir(fs.join(tmpdir, "zsuba")))
+      process.umask(old_umask)
+   end)
 end
 
 local function test_touch()
-   local old_umask = process.umask(util.oct("022"))
-   local tmpdir = sf("/tmp/fs_test_%d", process.getpid())
-   fs.mkdir(tmpdir)
-   local test_path = fs.join(tmpdir, "touch")
-   fs.touch(test_path)
-   assert(fs.is_reg(test_path))
-   assert.equals(fs.stat(test_path).perms, util.oct("644"))
-   process.system(sf("rm -rf %s", tmpdir))
-   process.umask(old_umask)
+   with_tmpdir(function(tmpdir)
+      local old_umask = process.umask(util.oct("022"))
+      local test_path = fs.join(tmpdir, "touch")
+      fs.touch(test_path)
+      assert(fs.is_reg(test_path))
+      assert.equals(fs.stat(test_path).perms, util.oct("644"))
+      process.umask(old_umask)
+   end)
 end
 
 local function test_glob()
@@ -424,6 +461,7 @@ end
 
 local function test()
    test_read()
+   test_write()
    test_seek()
    test_mkstemp()
    test_exists()
@@ -439,8 +477,8 @@ local function test()
    test_stream_write()
    test_symlink_readlink_realpath()
    test_Path()
-   test_mkdir()
-   test_mkpath()
+   test_mkdir_rmdir()
+   test_mkpath_rmpath()
    test_touch()
    test_glob()
 end

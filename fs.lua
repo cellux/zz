@@ -325,6 +325,14 @@ function M.readfile(path, rsize)
    return contents
 end
 
+function M.writefile(path, contents)
+   local f = M.open(path, bit.bor(ffi.C.O_CREAT,
+                                  ffi.C.O_WRONLY,
+                                  ffi.C.O_TRUNC))
+   f:write(contents)
+   f:close()
+end
+
 function M.touch(path)
    local flags = bit.bor(ffi.C.O_WRONLY,
                          ffi.C.O_CREAT,
@@ -729,6 +737,12 @@ function M.mkpath(path)
       if not M.exists(dir) then
          M.mkdir(dir)
       end
+   end
+end
+
+function M.rmpath(path)
+   if M.exists(path) then
+      process.system { "rm", "-rf", path }
    end
 end
 
