@@ -219,46 +219,32 @@ function Target:mtime()
    end
 end
 
+function Target:walk(process)
+   local function walk(t)
+      process(t)
+      for _,t in ipairs(t.depends) do
+         walk(t)
+      end
+   end
+   walk(self)
+end
+
 function Target:collect(key)
    local rv = {}
-   local function add(t)
+   local function collect(t)
       if t[key] then
          table.insert(rv, t[key])
       end
-      for _,t in ipairs(t.depends) do
-         add(t)
-      end
    end
-   add(self)
+   self:walk(collect)
    return rv
-end
-
-function Target:resolve_target_ref(name)
-   local t = self.ctx:get(name)
-   if not t then
-      ef("cannot resolve target ref: %s", name)
-   end
-   return t
-end
-
-function Target:resolve_targets(targets)
-   local function resolve(t)
-      if is_target(t) then
-         return t
-      elseif is_target_ref(t) then
-         return self:resolve_target_ref(t)
-      else
-         ef("cannot resolve target: %s", t)
-      end
-   end
-   return util.map(resolve, targets)
 end
 
 function Target:make()
    local my_mtime = self:mtime()
    local changed = {} -- list of updated dependencies
    local max_mtime = 0
-   self.depends = flatten(self:resolve_targets(self.depends))
+   self.depends = flatten(self.ctx:resolve_targets(self.depends))
    for _,t in ipairs(self.depends) do
       assert(is_target(t))
       t:make()
@@ -326,6 +312,9 @@ local function get_build_context(package_name)
          die("no package")
       end
       local pd = loadfile(pd_path)()
+      if not pd then
+         die("invalid package descriptor: %s (maybe does not return the package table?)", pd_path)
+      end
       package_name = pd.package
    end
    if not context_cache[package_name] then
@@ -361,6 +350,35 @@ end
 
 function BuildContext:get(key)
    return self.vars[key]
+end
+
+function BuildContext:resolve_target_ref(name)
+   local t = self:get(name)
+   if not t then
+      -- lookup in imported packages
+      for _,pkgname in ipairs(self.pd.imports) do
+         local ctx = get_build_context(pkgname)
+         t = ctx:get(name)
+         if t then break end
+      end
+   end
+   if not t then
+      ef("cannot resolve target ref: %s", name)
+   end
+   return t
+end
+
+function BuildContext:resolve_targets(targets)
+   local function resolve(t)
+      if is_target(t) then
+         return t
+      elseif is_target_ref(t) then
+         return self:resolve_target_ref(t)
+      else
+         ef("cannot resolve target: %s", t)
+      end
+   end
+   return util.map(resolve, targets)
 end
 
 function BuildContext:download(opts)
@@ -527,12 +545,20 @@ function BuildContext.CModuleTarget(ctx, opts)
       basename = sf("%s.o", modname),
       depends = util.extend({ c_src, c_h }, ctx.pd.depends[modname]),
       build = function(self)
+         local cflags = {}
+         local seen = {}
+         local function collect(t)
+            if not seen[t.ctx] then
+               util.extend(cflags, { "-iquote", t.ctx.srcdir })
+               seen[t.ctx] = true
+            end
+            util.extend(cflags, t.cflags)
+         end
+         self:walk(collect)
          ctx:compile_c {
             src = c_src,
             dst = self,
-            cflags = reduce(extend,
-                            self:collect("cflags"),
-                            { "-iquote", ctx.srcdir })
+            cflags = cflags
          }
       end
    }
