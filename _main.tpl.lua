@@ -1,5 +1,6 @@
 -- at the beginning, we still have LuaJIT's require which doesn't mangle module names
 -- thus we have to import the sha1 module by its real (mangled) name
+local ffi = require('ffi')
 local sha1 = require('zz_51d23c0856aa2da92d0b3f21308af0b55ba313dd')
 
 local function mangle(pkgname, modname)
@@ -14,33 +15,49 @@ local function setup_require(pname, seen)
    local pd = lj_require(mangle(pname, 'package')) -- package descriptor
    local loaders = {}
    pd.imports = pd.imports or {}
-   -- ZZ_CORE_PACKAGE is injected by the build system
-   table.insert(pd.imports, ZZ_CORE_PACKAGE)
    local imports_seen = {}
-   for _,dname in ipairs(pd.imports) do
+   local function process_import(dname)
       if not imports_seen[dname] then
          setup_require(dname, seen) -- generates dd.require()
          local dd = lj_require(mangle(dname, 'package'))
          dd.exports = dd.exports or {}
          for _,m in ipairs(dd.exports) do
-            local m_loader = function() return dd.require(m) end
-            loaders[m] = m_loader
-            loaders[dname..'/'..m] = m_loader
+            loaders[m] = dd.require
+            loaders[dname..'/'..m] = dd.require
          end
          imports_seen[dname] = true
       end
    end
-   pd.exports = pd.exports or {}
-   for _,m in ipairs(pd.exports) do
-      local m_mangled = mangle(pname, m)
-      local m_loader = function() return lj_require(m_mangled) end
-      loaders[m] = m_loader
-      loaders[pname..'/'..m] = m_loader
+   for _,dname in ipairs(pd.imports) do
+      process_import(dname)
    end
+   -- ZZ_CORE_PACKAGE is injected by the build system
+   process_import(ZZ_CORE_PACKAGE)
    pd.require = function(m)
       return (loaders[m] or lj_require)(m)
    end
-   setfenv(pd.require, setmetatable({ require = pd.require }, { __index = _G }))
+   local pd_env = setmetatable({ require = pd.require }, { __index = _G })
+   pd.exports = pd.exports or {}
+   for _,m in ipairs(pd.exports) do
+      local mangled = mangle(pname, m)
+      local loaded = nil
+      local m_loader = function()
+         if not loaded then
+            -- in LuaJIT, the loader for linked bytecode is defined in
+            -- lib_package.c:lj_cf_package_loader_preload() which is
+            -- the first element of the package.loaders array
+            --
+            -- if (when?) package.loaders changes, this will blow up
+            local preload = package.loaders[1]
+            local chunk = preload(mangled)
+            setfenv(chunk, pd_env)
+            loaded = chunk()
+         end
+         return loaded
+      end
+      loaders[m] = m_loader
+      loaders[pname..'/'..m] = m_loader
+   end
    return pd.require
 end
 

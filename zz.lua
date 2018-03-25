@@ -187,11 +187,31 @@ local function flatmap(transform, targets)
    return rv
 end
 
+local function identity(x)
+   return x
+end
+
 local function flatten(targets)
-   local function identity(x)
-      return x
-   end
    return flatmap(identity, targets)
+end
+
+local function walk(root, process, get_children, transform_child)
+   transform_child = transform_child or identity
+   if type(get_children) == "string" then
+      local key = get_children
+      get_children = function(t) return t[key] end
+   end
+   local seen = {}
+   local function walk(item)
+      if not seen[item] then
+         process(item)
+         seen[item] = true
+         for _,child in ipairs(get_children(item)) do
+            walk(transform_child(child))
+         end
+      end
+   end
+   walk(root)
 end
 
 function Target:create(opts)
@@ -219,16 +239,6 @@ function Target:mtime()
    end
 end
 
-function Target:walk(process)
-   local function walk(t)
-      process(t)
-      for _,t in ipairs(t.depends) do
-         walk(t)
-      end
-   end
-   walk(self)
-end
-
 function Target:collect(key)
    local rv = {}
    local function collect(t)
@@ -236,7 +246,7 @@ function Target:collect(key)
          table.insert(rv, t[key])
       end
    end
-   self:walk(collect)
+   walk(self, collect, "depends")
    return rv
 end
 
@@ -506,16 +516,26 @@ function BuildContext.LuaModuleTarget(ctx, opts)
    if not modname then
       ef("LuaModuleTarget: missing name")
    end
+   local m_dirname = fs.dirname(modname)
+   local m_basename = fs.basename(modname)
+   local m_srcdir, m_objdir
+   if m_dirname == '.' then
+      m_srcdir = ctx.srcdir
+      m_objdir = ctx.objdir
+   else
+      m_srcdir = fs.join(ctx.srcdir, m_dirname)
+      m_objdir = fs.join(ctx.objdir, m_dirname)
+   end
    local m_src = ctx:Target {
-      dirname = ctx.srcdir,
-      basename = sf("%s.lua", modname)
+      dirname = m_srcdir,
+      basename = sf("%s.lua", m_basename)
    }
    if not fs.exists(m_src.path) then
-      ef("missing source file: %s", m_src.basename)
+      ef("missing source file: %s", m_src.path)
    end
    return ctx:Target {
-      dirname = ctx.objdir,
-      basename = sf("%s.lo", modname),
+      dirname = m_objdir,
+      basename = sf("%s.lo", m_basename),
       depends = m_src,
       build = function(self)
          ctx:compile_lua {
@@ -532,21 +552,31 @@ function BuildContext.CModuleTarget(ctx, opts)
    if not modname then
       ef("CModuleTarget: missing name")
    end
+   local m_dirname = fs.dirname(modname)
+   local m_basename = fs.basename(modname)
+   local m_srcdir, m_objdir
+   if m_dirname == '.' then
+      m_srcdir = ctx.srcdir
+      m_objdir = ctx.objdir
+   else
+      m_srcdir = fs.join(ctx.srcdir, m_dirname)
+      m_objdir = fs.join(ctx.objdir, m_dirname)
+   end
    local c_src = ctx:Target {
-      dirname = ctx.srcdir,
-      basename = sf("%s.c", modname)
+      dirname = m_srcdir,
+      basename = sf("%s.c", m_basename)
    }
    if not fs.exists(c_src.path) then
       -- it's a pure Lua module
       return nil
    end
    local c_h = ctx:Target {
-      dirname = ctx.srcdir,
-      basename = sf("%s.h", modname)
+      dirname = m_srcdir,
+      basename = sf("%s.h", m_basename)
    }
    return ctx:Target {
-      dirname = ctx.objdir,
-      basename = sf("%s.o", modname),
+      dirname = m_objdir,
+      basename = sf("%s.o", m_basename),
       depends = util.extend({ c_src, c_h }, ctx.pd.depends[modname]),
       build = function(self)
          local cflags = {}
@@ -558,7 +588,7 @@ function BuildContext.CModuleTarget(ctx, opts)
             end
             util.extend(cflags, t.cflags)
          end
-         self:walk(collect)
+         walk(self, collect, "depends")
          ctx:compile_c {
             src = c_src,
             dst = self,
@@ -634,21 +664,30 @@ function BuildContext:library_target()
    return libtarget
 end
 
-function BuildContext:link_targets()
-   local targets = { self:library_target() }
-   util.extend(targets, self:native_targets())
-   for _,pkg in ipairs(self.pd.imports) do
-      util.extend(targets, get_build_context(pkg):link_targets())
+function BuildContext:walk_imports(process)
+   local function get_children(ctx)
+      return ctx.pd.imports
    end
+   local function transform_child(pkg)
+      return get_build_context(pkg)
+   end
+   walk(self, process, get_children, transform_child)
+end
+
+function BuildContext:link_targets()
+   local targets = {}
+   self:walk_imports(function(ctx)
+      table.insert(targets, ctx:library_target())
+      util.extend(targets, ctx:native_targets())
+   end)
    return targets
 end
 
 function BuildContext:ldflags()
    local ldflags = {}
-   util.extend(ldflags, self.pd.ldflags)
-   for _,pkg in ipairs(self.pd.imports) do
-      util.extend(ldflags, get_build_context(pkg):ldflags())
-   end
+   self:walk_imports(function(ctx)
+      util.extend(ldflags, ctx.pd.ldflags)
+   end)
    return ldflags
 end
 
@@ -762,15 +801,16 @@ function BuildContext:build()
    for _,pkg in ipairs(self.pd.imports) do
       get_build_context(pkg):build()
    end
-   process.chdir(self.srcdir)
-   for _,native_target in ipairs(self:native_targets()) do
-      native_target:make()
-   end
-   local library_target = self:library_target()
-   library_target:make()
-   for _,app_target in ipairs(self:app_targets()) do
-      app_target:make()
-   end
+   with_cwd(self.srcdir, function()
+      for _,native_target in ipairs(self:native_targets()) do
+         native_target:make()
+      end
+      local library_target = self:library_target()
+      library_target:make()
+      for _,app_target in ipairs(self:app_targets()) do
+         app_target:make()
+      end
+   end)
 end
 
 function BuildContext:install()
@@ -784,36 +824,51 @@ function BuildContext:install()
 end
 
 function BuildContext:run(appname)
+   local ctx = self
    self:build()
-   if appname:sub(-4) == ".lua" then
-      appname = appname:sub(1,-5)
+   local path = appname
+   if path:sub(-4) ~= ".lua" then
+      path = path..".lua"
    end
+   if not fs.exists(path) then
+      path = fs.join(self.srcdir, path)
+   end
+   if not fs.exists(path) then
+      die("cannot find app: %s (%s)", appname, path)
+   end
+   path = fs.realpath(path)
+   if path:sub(1,#self.srcdir) ~= self.srcdir then
+      die("this app belongs to another package: %s", path)
+   end
+   -- convert to package-relative module name
+   appname = path:sub(#self.srcdir+2,-5)
    local app_targets = self:lua_c_module_targets(appname)
    if not app_targets then
       die("cannot build app target: %s", appname)
    end
-   for _,t in ipairs(app_targets) do
-      t:make()
-   end
    local main_targets = self:build_main([[
-      local app_module = require(']]..appname..[[')
+      local app_module = require(']]..self:mangle(appname)..[[')
       if type(app_module)=='table' and app_module.main then
          app_module.main()
       end
    ]])
    local app = self:Target {
-      dirname = self.tmpdir,
-      basename = appname
+      dirname = fs.join(self.tmpdir, fs.dirname(appname)),
+      basename = fs.basename(appname),
+      depends = { app_targets, main_targets },
+      build = function(self)
+         ctx:link {
+            dst = self,
+            src = {
+               ctx:link_targets(),
+               app_targets,
+               main_targets
+            },
+            ldflags = ctx:ldflags()
+         }
+      end
    }
-   self:link {
-      dst = app,
-      src = {
-         self:link_targets(),
-         app_targets,
-         main_targets
-      },
-      ldflags = self:ldflags()
-   }
+   app:make()
    system { app.path }
 end
 
@@ -968,28 +1023,32 @@ local function checkout(package_name, update)
    if not fs.exists(srcdir) then
       log("mkpath: %s", srcdir)
       fs.mkpath(srcdir)
-      process.chdir(srcdir)
-      local status = system { "git", "clone", pkgurl, "." }
-      if status ~= 0 then
-         die("git clone failed")
-      end
+      with_cwd(srcdir, function()
+         local status = system { "git", "clone", pkgurl, "." }
+         if status ~= 0 then
+            die("git clone failed")
+         end
+      end)
    else
-      process.chdir(srcdir)
-      local status = system { "git", "fetch" }
+      with_cwd(srcdir, function()
+         local status = system { "git", "fetch" }
+         if status ~= 0 then
+            die("git fetch failed")
+         end
+      end)
+   end
+   with_cwd(srcdir, function()
+      local status = process.system { "git", "checkout", "master" }
       if status ~= 0 then
-         die("git fetch failed")
+         die("git checkout failed")
       end
-   end
-   local status = process.system { "git", "checkout", "master" }
-   if status ~= 0 then
-      die("git checkout failed")
-   end
-   if update then
-      local status = system { "git", "pull" }
-      if status ~= 0 then
-         die("git pull failed")
+      if update then
+         local status = system { "git", "pull" }
+         if status ~= 0 then
+            die("git pull failed")
+         end
       end
-   end
+   end)
    -- checkout dependencies
    local pd = PackageDescriptor(pkgname)
    for _,package_name in ipairs(pd.imports) do
