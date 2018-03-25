@@ -17,7 +17,6 @@ The current version only runs on Linux.
 * non-blocking file operations (file)
 * process management (process)
 * access to environment variables (env)
-* append a zip file to the executable, access its contents through a virtual filesystem (vfs)
 
 ## Internal dependencies
 
@@ -49,24 +48,7 @@ make test
 
 If compilation succeeds, you shall find a `zz` executable under `$ZZPATH/bin`. It's advisable to place this directory onto PATH as all ZZ executables intended for global consumption are installed there.
 
-Once `zz` is available, you can install a package of example programs:
-
-```bash
-zz get github.com/cellux/zz_examples
-```
-
-The resulting executables can be found at `$ZZPATH/bin/github.com/cellux/zz_examples` (the reason it doesn't install into `$ZZPATH/bin` is that I didn't want to pollute the global command namespace with lots of example programs).
-
-If you tinker with the source code of an example, the easiest way to test your changes is via `zz run`:
-
-```bash
-cd $ZZPATH/src/github.com/cellux/zz_examples
-zz run <example>
-```
-
-This would compile `<example>.lua` into a temporary directory and run the resulting binary from there (without copying anything into the `bin` hierarcy).
-
-Further documentation for the `zz` tool can be found in the [wiki](zz.txt).
+TODO: Describe how to create programs/packages on top of ZZ.
 
 ## Goals
 
