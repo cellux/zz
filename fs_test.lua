@@ -249,6 +249,9 @@ end
 
 local function test_basename()
    assert.equals(fs.basename("testdata/hello.txt"), "hello.txt")
+   assert.equals(fs.basename("/hello.txt"), "hello.txt")
+   assert.equals(fs.basename("./hello.txt"), "hello.txt")
+   assert.equals(fs.basename("hello.txt"), "hello.txt")
 end
 
 local function test_dirname()
@@ -257,6 +260,7 @@ local function test_dirname()
    assert.equals(fs.dirname("./"), ".")
    assert.equals(fs.dirname("./hello.txt"), ".")
    assert.equals(fs.dirname("testdata/hello.txt"), "testdata")
+   assert.equals(fs.dirname("x"), ".")
 end
 
 local function test_join()
@@ -264,6 +268,7 @@ local function test_join()
    assert.equals(fs.join("abc"), "abc")
    assert.equals(fs.join("abc","def"), "abc/def")
    assert.equals(fs.join("abc",".", "def"), "abc/./def")
+   assert.equals(fs.join("abc","/def"), "abc//def")
 end
 
 local function test_stream_read()
