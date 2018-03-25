@@ -314,8 +314,14 @@ File_mt.__gc = File_mt.close
 local File = ffi.metatype("struct zz_fs_File_ct", File_mt)
 
 function M.open(path, flags, mode)
-   local fd = util.check_errno("open", ffi.C.open(path, flags or ffi.C.O_RDONLY, mode or util.oct("666")))
-   return File(fd)
+   local fd = ffi.C.open(path,
+                         flags or ffi.C.O_RDONLY,
+                         mode or util.oct("666"))
+   if fd == -1 then
+      error(sf("open(%s) failed: %s", path, errno.strerror()), 2)
+   else
+      return File(fd)
+   end
 end
 
 function M.readfile(path, rsize)
