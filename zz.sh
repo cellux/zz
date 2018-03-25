@@ -43,19 +43,16 @@ PACKAGE_INSTALL=(zz)
 
 ZZPATH="${ZZPATH:-$HOME/zz}"
 SRCDIR="$ZZPATH/src/$PACKAGE"
+TMPDIR="$ZZPATH/tmp/$PACKAGE"
 OBJDIR="$ZZPATH/obj/$PACKAGE"
 LIBDIR="$ZZPATH/lib/$PACKAGE"
 BINDIR="$ZZPATH/bin/$PACKAGE"
 GBINDIR="$ZZPATH/bin" # for globally installed executables
 
+mkdir -p "$TMPDIR"
 mkdir -p "$OBJDIR"
 mkdir -p "$LIBDIR"
 mkdir -p "$BINDIR"
-
-TMPDIR="$ZZPATH/tmp/$PACKAGE/$$"
-
-mkdir -p "$TMPDIR"
-trap "rm -rf '$TMPDIR'" EXIT
 
 LUAJIT_VER="2.1.0-beta3"
 LUAJIT_TGZ="LuaJIT-$LUAJIT_VER.tar.gz"
