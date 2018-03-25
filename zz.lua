@@ -311,7 +311,11 @@ local function get_build_context(package_name)
       if not pd_path then
          die("no package")
       end
-      local pd = loadfile(pd_path)()
+      local pd_chunk, err = loadfile(pd_path)
+      if type(pd_chunk) ~= "function" then
+         die(err)
+      end
+      local pd = pd_chunk()
       if not pd then
          die("invalid package descriptor: %s (maybe does not return the package table?)", pd_path)
       end
