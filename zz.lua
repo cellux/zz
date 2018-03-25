@@ -100,18 +100,18 @@ zz build [<package>]
    process.exit(0)
 end
 
-local function find_package_descriptor()
+local function find_package_descriptor(dir)
+   dir = dir or process.getcwd()
    local pd_path
    local found = false
-   local cwd = process.getcwd()
    while not found do
-      pd_path = fs.join(cwd, 'package.lua')
+      pd_path = fs.join(dir, 'package.lua')
       if fs.exists(pd_path) then
          found = true
-      elseif cwd == '/' then
+      elseif dir == '/' then
          break
       else
-         cwd = fs.dirname(cwd)
+         dir = fs.dirname(dir)
       end
    end
    return found and pd_path or nil
