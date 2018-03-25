@@ -71,5 +71,7 @@ TODO: Describe how to create programs/packages on top of ZZ.
 * [Luvit](https://luvit.io/)
 * [Raspberry Pi](https://www.raspberrypi.org/)
 * [Scheme](http://www.schemers.org/Documents/Standards/R5RS/)
+* [Extempore](https://github.com/digego/extempore)
+* [SuperCollider](https://supercollider.github.io/)
 * [Leonard and Sylvia Ritter](http://www.duangle.com/)
 * [William A. Adams](https://williamaadams.wordpress.com/)
