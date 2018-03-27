@@ -1,6 +1,5 @@
 -- at the beginning, we still have LuaJIT's require which doesn't mangle module names
 -- thus we have to import the sha1 module by its real (mangled) name
-local ffi = require('ffi')
 local sha1 = require('zz_51d23c0856aa2da92d0b3f21308af0b55ba313dd')
 
 local function mangle(pkgname, modname)
@@ -9,10 +8,19 @@ end
 
 local lj_require = _G.require
 
+local function reverse(t)
+   local rv = {}
+   for i=#t,1,-1 do
+      table.insert(rv, t[i])
+   end
+   return rv
+end
+
 local function setup_require(pname, seen)
    if seen[pname] then return end
    seen[pname] = true
-   local pd = lj_require(mangle(pname, 'package')) -- package descriptor
+   -- load package descriptor
+   local pd = lj_require(mangle(pname, 'package'))
    local loaders = {}
    pd.imports = pd.imports or {}
    local imports_seen = {}
@@ -20,19 +28,27 @@ local function setup_require(pname, seen)
       if not imports_seen[dname] then
          setup_require(dname, seen) -- generates dd.require()
          local dd = lj_require(mangle(dname, 'package'))
+         -- modules exported by imported packages should be
+         -- requireable by their short name
          dd.exports = dd.exports or {}
          for _,m in ipairs(dd.exports) do
-            loaders[m] = dd.require
-            loaders[dname..'/'..m] = dd.require
+            loaders[m] = dd.require             -- short
+            loaders[dname..'/'..m] = dd.require -- qualified
          end
          imports_seen[dname] = true
       end
    end
-   for _,dname in ipairs(pd.imports) do
-      process_import(dname)
-   end
    -- ZZ_CORE_PACKAGE is injected by the build system
    process_import(ZZ_CORE_PACKAGE)
+   -- the order of packages in pd.imports matters: if packages P1 and
+   -- P2 both define module M but P2 comes *before* P1 in the import
+   -- list, require(M) will find the P2 version
+   --
+   -- a specific version can pulled in by requiring the fully
+   -- qualified module name e.g. "github.com/cellux/zz/util"
+   for _,dname in ipairs(reverse(pd.imports)) do
+      process_import(dname)
+   end
    pd.require = function(m)
       return (loaders[m] or lj_require)(m)
    end
