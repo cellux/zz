@@ -401,6 +401,9 @@ local function Scheduler() -- scheduler constructor
       while not runnables:empty() or waiting['quit'] do
          tick()
       end
+      -- nobody will wake up sleeping threads any more
+      -- so we can just get rid of them
+      sleeping:clear()
    end
 
    local function to_function(x)
