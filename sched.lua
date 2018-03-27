@@ -369,7 +369,7 @@ local function Scheduler() -- scheduler constructor
                end
             elseif status == "dead" then
                if not ok then
-                  error(rv, 0)
+                  error(debug.traceback(t, rv), 0)
                else
                   -- the coroutine finished its execution
                end

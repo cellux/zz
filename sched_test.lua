@@ -295,3 +295,16 @@ sched.on('quit',
          end)
 sched()
 assert.equals(output, {"sched.quit", "quit-handler-1", "quit-handler-2"})
+
+-- errors thrown by scheduled threads contain a stack trace
+
+sched(function()
+      sched(function()
+            function throw()
+               error("not a respectable software company")
+            end
+            throw()
+      end)
+end)
+local err = assert.throws(sched, "not a respectable software company")
+assert.match("in function 'throw'", err)
