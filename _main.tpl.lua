@@ -82,10 +82,11 @@ _G.require = setup_require(ZZ_PACKAGE, {})
 
 require('globals')
 
-local process = require('process')
-local sched = require('sched')
-local epoll = require('epoll')
-sched.poller_factory = epoll.poller_factory
+local function sched_main(main)
+   local sched = require('sched')
+   sched(main)
+   sched()
+end
 
 local function require_test(modname)
   local ok, err = pcall(require, modname)

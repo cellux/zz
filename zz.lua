@@ -777,8 +777,8 @@ function BuildContext:app_targets()
          build = function(self)
             local main_targets = ctx:build_main([[
                local app_module = require(']]..appname..[[')
-               if type(app_module)=='table' and app_module.main then
-                  app_module.main()
+               if type(app_module)=='table' and type(app_module.main)=='function' then
+                  sched_main(app_module.main)
                end
             ]])
             ctx:link {
@@ -848,8 +848,8 @@ function BuildContext:run(appname)
    end
    local main_targets = self:build_main([[
       local app_module = require(']]..self:mangle(appname)..[[')
-      if type(app_module)=='table' and app_module.main then
-         app_module.main()
+      if type(app_module)=='table' and type(app_module.main)=='function' then
+         sched_main(app_module.main)
       end
    ]])
    local app = self:Target {
