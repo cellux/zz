@@ -32,9 +32,10 @@ end
 
 -- poller_factory shall be a callable returning an object which
 -- implements the poller protocol (see epoll module for an example)
---
--- must be set to a platform-specific implementation at startup
-M.poller_factory = nil
+M.poller_factory = function()
+   local epoll = require('epoll')
+   return epoll.poller_factory()
+end
 
 local module_constructors = {}
 
@@ -107,10 +108,6 @@ local function Scheduler() -- scheduler constructor
          error("event id underflow")
       end
       return rv
-   end
-
-   if not M.poller_factory then
-      error("sched.poller_factory is unset")
    end
 
    local poller = M.poller_factory()
