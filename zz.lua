@@ -929,6 +929,7 @@ end
 function BuildContext:clean()
    rmpath(self.objdir)
    rmpath(self.libdir)
+   rmpath(self.tmpdir)
 end
 
 function BuildContext:distclean()
