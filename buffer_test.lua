@@ -10,6 +10,9 @@ assert.equals(#buf, 0) -- #buf is equivalent to buf:size()
 assert.equals(buf:str(), "") -- get contents as a string
 assert.equals(tostring(buf), "") -- same as buf:str()
 
+-- a buffer is cdata
+assert.equals(type(buf), "cdata")
+
 -- test if an object is a buffer
 assert(buffer.is_buffer(buf))
 
