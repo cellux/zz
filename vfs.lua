@@ -76,6 +76,18 @@ end
 
 M.Root = Root
 
+function M.mount_all(mounts, srcdir)
+   for k,v in pairs(mounts) do
+      if type(k) == "number" then
+         M.mount(fs.join(srcdir, v))
+      elseif type(k) == "string" then
+         M.mount(fs.join(srcdir, k), v)
+      else
+         ef("invalid mount in package descriptor: %s:%s", k, v)
+      end
+   end
+end
+
 local default_root
 
 local function get_default_root()

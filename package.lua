@@ -261,6 +261,7 @@ P.exports = {
    "trigger",
    "uri",
    "util",
+   "vfs",
    "zz",
 }
 
