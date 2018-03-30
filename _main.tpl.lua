@@ -54,7 +54,7 @@ local function setup_require(pname, seen)
    end
    local pd_env = setmetatable({ require = pd.require }, { __index = _G })
    pd.exports = pd.exports or {}
-   for _,m in ipairs(pd.exports) do
+   local function process_export(m)
       local mangled = mangle(pname, m)
       local loaded = nil
       local m_loader = function()
@@ -74,6 +74,10 @@ local function setup_require(pname, seen)
       loaders[m] = m_loader
       loaders[pname..'/'..m] = m_loader
    end
+   for _,m in ipairs(pd.exports) do
+      process_export(m)
+   end
+   process_export("package")
    return pd.require
 end
 
