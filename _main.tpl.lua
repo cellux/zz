@@ -94,7 +94,7 @@ local function require_test(modname)
      pf(modname..': OK')
   else
      pf(modname..': FAIL')
-     pf(err)
+     print(err)
   end
 end
 
