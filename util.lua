@@ -124,15 +124,18 @@ function M.chain(self, index)
    return self
 end
 
-function M.ClassLoader(self, package_path)
+function M.ClassLoader(self, require, package_path)
    -- turn any object into a class loader
    -- which can autoload classes from package_path
-   function self:require(name)
-      return require(sf("%s.%s", package_path, name))
-   end
-   function self:new(name, ...)
-      local constructor = self:require(name)
-      return constructor(...)
+   --
+   -- the constructors of classes loaded this way all take the object
+   -- through which they have been loaded as their first argument
+   local function load_class(name)
+      if package_path then
+         return require(sf("%s/%s", package_path, name))
+      else
+         return require(name)
+      end
    end
    local function is_classname(name)
       -- it's a class name if it starts with a capital letter
@@ -141,7 +144,7 @@ function M.ClassLoader(self, package_path)
    end
    local function index(self, name)
       if is_classname(name) then
-         local ok, pkg = pcall(self.require, self, name)
+         local ok, pkg = pcall(load_class, name)
          return ok and pkg
       end
    end
