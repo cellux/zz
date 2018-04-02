@@ -885,7 +885,7 @@ function BuildContext:run(appname)
       end
    }
    app:make()
-   system { app.path }
+   system { app.path, unpack(_G.arg, 3) }
 end
 
 function BuildContext:find_tests()
