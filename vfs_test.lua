@@ -1,6 +1,7 @@
 local vfs = require('vfs')
 local fs = require('fs')
 local assert = require('assert')
+local buffer = require('buffer')
 
 -- ensure we are standing in srcdir
 assert(fs.is_dir('testdata'))
@@ -14,6 +15,9 @@ assert.equals(root:readfile('arborescence.jpg'), fs.readfile('testdata/arboresce
 root:mount('.', 'src')
 assert.equals(root:readfile('arborescence.jpg'), fs.readfile('testdata/arborescence.jpg'))
 assert.equals(root:readfile('src/vfs_test.lua'), fs.readfile('./vfs_test.lua'))
+
+-- vfs readfile returns a buffer
+assert(buffer.is_buffer(root:readfile('arborescence.jpg')))
 
 -- calls on vfs itself are proxied to a default Root instance
 vfs.mount('testdata', 'assets')
