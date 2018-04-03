@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <inttypes.h>
 #include <poll.h>
 
 #include "trigger.h"
@@ -26,7 +27,7 @@ void zz_trigger_poll(zz_trigger *t) {
     exit(1);
   }
   if (data != 1) {
-    fprintf(stderr, "zz_trigger_poll(): data=%lld, expected 1\n", data);
+    fprintf(stderr, "zz_trigger_poll(): data=%" PRIu64 ", expected 1\n", data);
     exit(1);
   }
 }

@@ -47,7 +47,7 @@ function Buffer_mt:size(new_size)
    if new_size then
       self.buf.size = new_size
    end
-   return self.buf.size
+   return tonumber(self.buf.size)
 end
 
 function Buffer_mt:__len()
@@ -58,12 +58,12 @@ function Buffer_mt:capacity(new_capacity)
    if new_capacity then
       ffi.C.zz_buffer_resize(self.buf, new_capacity)
    end
-   return self.buf.capacity
+   return tonumber(self.buf.capacity)
 end
 
 function Buffer_mt:str(index, length)
    index = index or 0
-   length = length or (self.buf.size - index)
+   length = length or (tonumber(self.buf.size) - index)
    return ffi.string(self.buf.data+index, length)
 end
 

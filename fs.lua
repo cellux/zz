@@ -761,7 +761,7 @@ function M.glob(pattern, flags)
    local status = ffi.C.glob(pattern, flags, nil, pglob)
    local rv = {}
    if status == 0 then
-      for i=1,pglob.gl_pathc do
+      for i=1,tonumber(pglob.gl_pathc) do
          table.insert(rv, ffi.string(pglob.gl_pathv[i-1]))
       end
    elseif status ~= ffi.C.GLOB_NOMATCH then
