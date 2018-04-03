@@ -43,5 +43,5 @@ test_digest(data, digest.sha224, '828f4268bdf4ae05d1ca32d0618840d29bec8309627b59
 test_digest(data, digest.sha256, 'fb0069a988163cead062b2b1b5dfca23a5d0e0a8abace9cbaf1007a0dc4931ae')
 test_digest(data, digest.sha384, 'aa86c8de290c6c635da4bf6cff3d9e162d12070db9dda0660c20ee36b5759a2ee24d0bb01a89f746989fad971cb0d782')
 test_digest(data, digest.sha512, 'a9ecfab822675ac5b0cf90dbe52897c9f0cd515f61ee725d967c0334c38f4abf6111f1d616e515e785306ab19846e168d4a814eb32b247a91534fec3ed20c32e')
-test_digest(data, digest.mdc2, '13d5d1eb5ec6fd5de026113b45975a92')
+--test_digest(data, digest.mdc2, '13d5d1eb5ec6fd5de026113b45975a92')
 test_digest(data, digest.ripemd160, 'b4054d90852eaa7696c55f7bfcd2e3eff284c2bc')
