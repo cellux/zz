@@ -817,9 +817,12 @@ function BuildContext:app_targets()
    return targets
 end
 
-function BuildContext:build()
-   for _,pkg in ipairs(self.pd.imports) do
-      get_build_context(pkg):build()
+function BuildContext:build(opts)
+   opts = opts or {}
+   if opts.recursive then
+      for _,pkg in ipairs(self.pd.imports) do
+         get_build_context(pkg):build(opts)
+      end
    end
    with_cwd(self.srcdir, function()
       for _,native_target in ipairs(self:native_targets()) do
@@ -827,14 +830,19 @@ function BuildContext:build()
       end
       local library_target = self:library_target()
       library_target:make()
-      for _,app_target in ipairs(self:app_targets()) do
-         app_target:make()
+      if opts.apps then
+         for _,app_target in ipairs(self:app_targets()) do
+            app_target:make()
+         end
       end
    end)
 end
 
 function BuildContext:install()
-   self:build()
+   self:build {
+      recursive = true,
+      apps = true
+   }
    for _,app_target in ipairs(self:app_targets()) do
       self:symlink {
          src = app_target,
@@ -845,7 +853,10 @@ end
 
 function BuildContext:run(appname)
    local ctx = self
-   self:build()
+   self:build {
+      recursive = true,
+      apps = false
+   }
    local path = appname
    if path:sub(-4) ~= ".lua" then
       path = path..".lua"
@@ -898,7 +909,10 @@ function BuildContext:find_tests()
 end
 
 function BuildContext:test(test_names)
-   self:build()
+   self:build {
+      recursive = true,
+      apps = false
+   }
    if not test_names or #test_names == 0 then
       test_names = self:find_tests()
    else
@@ -1037,7 +1051,8 @@ return P
    end
 end
 
-local function checkout(package_name, update)
+local function checkout(package_name, opts)
+   opts = opts or {}
    local pkgname, pkgurl = parse_package_name(package_name)
    local srcdir = sf("%s/src/%s", ZZPATH, pkgname)
    if not fs.exists(srcdir) then
@@ -1062,17 +1077,22 @@ local function checkout(package_name, update)
       if status ~= 0 then
          die("git checkout failed")
       end
-      if update then
+      if opts.update then
          local status = system { "git", "pull" }
          if status ~= 0 then
             die("git pull failed")
          end
       end
    end)
-   -- checkout dependencies
-   local pd = PackageDescriptor(pkgname)
-   for _,package_name in ipairs(pd.imports) do
-      checkout(package_name)
+   if opts.recursive then
+      -- checkout dependencies
+      local pd = PackageDescriptor(pkgname)
+      for _,package_name in ipairs(pd.imports) do
+         checkout(package_name, {
+            update = false,
+            recursive = true
+         })
+      end
    end
 end
 
@@ -1093,9 +1113,13 @@ function handlers.checkout(args)
    local ap = argparser()
    ap:add { name = "pkg", type = "string" }
    ap:add { name = "update", option = "-u|--update" }
+   ap:add { name = "recursive", option = "-r|--recursive" }
    local args = ap:parse(args)
    if args.pkg then
-      checkout(args.pkg, args.update)
+      checkout(args.pkg, {
+         update = args.update,
+         recursive = args.recursive
+      })
    else
       die("Missing argument: pkg")
    end
@@ -1104,8 +1128,12 @@ end
 function handlers.build(args)
    local ap = argparser()
    ap:add { name = "pkg", type = "string" }
+   ap:add { name = "recursive", option = "-r|--recursive" }
    local args = ap:parse(args)
-   get_build_context(args.pkg):build()
+   get_build_context(args.pkg):build {
+      recursive = args.recursive,
+      apps = true
+   }
 end
 
 function handlers.install(args)
@@ -1121,7 +1149,10 @@ function handlers.get(args)
    ap:add { name = "update", option = "-u|--update" }
    local args = ap:parse(args)
    if args.pkg then
-      checkout(args.pkg, args.update)
+      checkout(args.pkg, {
+         update = args.update,
+         recursive = true
+      })
       get_build_context(args.pkg):install()
    else
       die("Missing argument: pkg")
