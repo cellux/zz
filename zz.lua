@@ -284,6 +284,10 @@ function Target:make(force)
    end
 end
 
+function Target:force_make()
+   self:make(true)
+end
+
 local function maybe_a_file_path(x)
    return type(x) == "string"
 end
@@ -730,7 +734,7 @@ function BuildContext:build_main(bootstrap_code)
          }
       end
    }
-   main_o:make(true)
+   main_o:force_make()
    local main_tpl_lua = ctx:Target {
       dirname = zzctx.srcdir,
       basename = "_main.tpl.lua"
@@ -762,7 +766,7 @@ function BuildContext:build_main(bootstrap_code)
          }
       end
    }
-   main_lo:make(true)
+   main_lo:force_make()
    return { main_o, main_lo }
 end
 
