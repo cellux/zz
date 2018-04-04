@@ -143,7 +143,7 @@ local function PackageDescriptor(package_name)
    pd.libname = pd.libname or fs.basename(pd.package)
    -- external packages used by this package
    pd.imports = pd.imports or {}
-   -- ZZ_CORE_PACKAGE is imported by default into everything except core
+   -- ZZ_CORE_PACKAGE is imported by default into everything (except core)
    if pd.package ~= ZZ_CORE_PACKAGE and not util.contains(ZZ_CORE_PACKAGE, pd.imports) then
       table.insert(pd.imports, ZZ_CORE_PACKAGE)
    end
@@ -151,6 +151,7 @@ local function PackageDescriptor(package_name)
    pd.native = pd.native or {}
    -- Lua/C modules exported by this package
    pd.exports = pd.exports or {}
+   -- the package descriptor shall always be exported
    if not util.contains("package", pd.exports) then
       table.insert(pd.exports, "package")
    end
@@ -603,59 +604,58 @@ function BuildContext.CModuleTarget(ctx, opts)
    }
 end
 
-function BuildContext:native_targets()
-   local targets = {}
-   for libname, target_factory in pairs(self.pd.native) do
-      local basename = sf("lib%s.a", libname)
-      local native_target = self:get(basename)
-      if not native_target then
+function BuildContext:prep_native_targets()
+   if not self.native_targets then
+      local targets = {}
+      for libname, target_factory in pairs(self.pd.native) do
+         local basename = sf("lib%s.a", libname)
          if type(target_factory) ~= "function" then
             ef("invalid target factory for native library %s: %s", libname, target_factory)
          end
          local target_opts = {
             name = libname
          }
-         native_target = target_factory(self, target_opts)
-         self:set(basename, native_target)
+         local t = target_factory(self, target_opts)
+         self:set(basename, t)
+         table.insert(targets, t)
       end
-      table.insert(targets, native_target)
+      self.native_targets = targets
    end
-   return targets
 end
 
-function BuildContext:lua_c_module_targets(modname)
-   local targets = self:get(modname)
-   if not targets then
-      targets = {}
-      local opts = { name = modname }
-      local lua_target = self:LuaModuleTarget(opts)
-      table.insert(targets, lua_target)
-      local c_target = self:CModuleTarget(opts)
-      if c_target then
-         table.insert(targets, c_target)
-      end
-      self:set(modname, targets)
-   end
-   return targets
-end
-
-function BuildContext:exported_targets()
+function BuildContext:module_targets(modname)
    local targets = {}
-   for _,modname in ipairs(self.pd.exports) do
-      util.extend(targets, self:lua_c_module_targets(modname))
+   local opts = { name = modname }
+   local lua_target = self:LuaModuleTarget(opts)
+   table.insert(targets, lua_target)
+   local c_target = self:CModuleTarget(opts)
+   if c_target then
+      table.insert(targets, c_target)
    end
    return targets
 end
 
-function BuildContext:library_target()
-   local ctx = self
-   local basename = sf("lib%s.a", self.pd.libname)
-   local libtarget = self:get(basename)
-   if not libtarget then
-      libtarget = ctx:Target {
-         dirname = self.libdir,
+function BuildContext:prep_exported_targets()
+   if not self.exported_targets then
+      local targets = {}
+      for _,modname in ipairs(self.pd.exports) do
+         local module_targets = self:module_targets(modname)
+         self:set(modname, module_targets)
+         util.extend(targets, module_targets)
+      end
+      self.exported_targets = targets
+   end
+end
+
+function BuildContext:prep_library_target()
+   if not self.library_target then
+      self:prep_exported_targets()
+      local basename = sf("lib%s.a", self.pd.libname)
+      local ctx = self
+      local t = ctx:Target {
+         dirname = ctx.libdir,
          basename = basename,
-         depends = self:exported_targets(),
+         depends = ctx.exported_targets,
          build = function(self, changed)
             ctx:ar {
                dst = self,
@@ -663,9 +663,9 @@ function BuildContext:library_target()
             }
          end
       }
-      ctx:set(basename, libtarget)
+      ctx:set(basename, t)
+      self.library_target = t
    end
-   return libtarget
 end
 
 function BuildContext:walk_imports(process)
@@ -678,13 +678,17 @@ function BuildContext:walk_imports(process)
    walk(self, process, get_children, transform_child)
 end
 
-function BuildContext:link_targets()
-   local targets = {}
-   self:walk_imports(function(ctx)
-      table.insert(targets, ctx:library_target())
-      util.extend(targets, ctx:native_targets())
-   end)
-   return targets
+function BuildContext:prep_link_targets()
+   if not self.link_targets then
+      local targets = {}
+      self:walk_imports(function(ctx)
+         ctx:prep_library_target()
+         table.insert(targets, ctx.library_target)
+         ctx:prep_native_targets()
+         util.extend(targets, ctx.native_targets)
+      end)
+      self.link_targets = targets
+   end
 end
 
 function BuildContext:ldflags()
@@ -698,6 +702,7 @@ end
 function BuildContext:build_main(bootstrap_code)
    local ctx = self
    local zzctx = get_build_context(ZZ_CORE_PACKAGE)
+   zzctx:prep_native_targets() -- for libluajit.a cflags
    local main_tpl_c = ctx:Target {
       dirname = zzctx.srcdir,
       basename = "_main.tpl.c"
@@ -781,40 +786,43 @@ function BuildContext:genbootstrap(appname)
    return code
 end
 
-function BuildContext:app_targets()
-   local ctx = self
-   local targets = {}
-   for _,appname in ipairs(self.pd.apps) do
-      local app_module_targets = {}
-      if not util.contains(appname, self.pd.exports) then
-         -- it's not included in the library
-         -- we shall build it separately
-         app_module_targets = self:lua_c_module_targets(appname)
-      end
-      local apptarget = self:Target {
-         dirname = self.bindir,
-         basename = appname,
-         depends = {
-            ctx:link_targets(),
-            app_module_targets
-         },
-         build = function(self)
-            local bootstrap = ctx:genbootstrap(appname)
-            local main_targets = ctx:build_main(bootstrap)
-            ctx:link {
-               dst = self,
-               src = {
-                  ctx:link_targets(),
-                  app_module_targets,
-                  main_targets
-               },
-               ldflags = ctx:ldflags()
-            }
+function BuildContext:prep_app_targets()
+   if not self.app_targets then
+      local ctx = self
+      ctx:prep_link_targets()
+      local targets = {}
+      for _,appname in ipairs(self.pd.apps) do
+         local app_module_targets = {}
+         if not util.contains(appname, self.pd.exports) then
+            -- it's not included in the library as a module
+            -- we shall build it separately
+            app_module_targets = self:module_targets(appname)
          end
-      }
-      table.insert(targets, apptarget)
+         local apptarget = self:Target {
+            dirname = self.bindir,
+            basename = appname,
+            depends = {
+               ctx.link_targets,
+               app_module_targets
+            },
+            build = function(self)
+               local bootstrap = ctx:genbootstrap(appname)
+               local main_targets = ctx:build_main(bootstrap)
+               ctx:link {
+                  dst = self,
+                  src = {
+                     ctx.link_targets,
+                     app_module_targets,
+                     main_targets
+                  },
+                  ldflags = ctx:ldflags()
+               }
+            end
+         }
+         table.insert(targets, apptarget)
+      end
+      self.app_targets = targets
    end
-   return targets
 end
 
 function BuildContext:build(opts)
@@ -825,13 +833,15 @@ function BuildContext:build(opts)
       end
    end
    with_cwd(self.srcdir, function()
-      for _,native_target in ipairs(self:native_targets()) do
+      self:prep_native_targets()
+      for _,native_target in ipairs(self.native_targets) do
          native_target:make()
       end
-      local library_target = self:library_target()
-      library_target:make()
+      self:prep_library_target()
+      self.library_target:make()
       if opts.apps then
-         for _,app_target in ipairs(self:app_targets()) do
+         self:prep_app_targets()
+         for _,app_target in ipairs(self.app_targets) do
             app_target:make()
          end
       end
@@ -843,7 +853,8 @@ function BuildContext:install()
       recursive = true,
       apps = true
    }
-   for _,app_target in ipairs(self:app_targets()) do
+   self:prep_app_targets()
+   for _,app_target in ipairs(self.app_targets) do
       self:symlink {
          src = app_target,
          dst = fs.join(self.gbindir, app_target.basename)
@@ -854,7 +865,7 @@ end
 function BuildContext:run(appname)
    local ctx = self
    self:build {
-      recursive = true,
+      recursive = false,
       apps = false
    }
    local path = appname
@@ -873,12 +884,13 @@ function BuildContext:run(appname)
    end
    -- convert to package-relative module name
    appname = path:sub(#self.srcdir+2,-5)
-   local app_targets = self:lua_c_module_targets(appname)
+   local app_targets = self:module_targets(appname)
    if not app_targets then
       die("cannot build app target: %s", appname)
    end
    local bootstrap = self:genbootstrap(appname)
    local main_targets = self:build_main(bootstrap)
+   ctx:prep_link_targets()
    local app = self:Target {
       dirname = fs.join(self.tmpdir, fs.dirname(appname)),
       basename = fs.basename(appname),
@@ -887,7 +899,7 @@ function BuildContext:run(appname)
          ctx:link {
             dst = self,
             src = {
-               ctx:link_targets(),
+               ctx.link_targets,
                app_targets,
                main_targets
             },
@@ -927,7 +939,7 @@ function BuildContext:test(test_names)
    local test_targets = {}
    local bootstrap = {}
    for _,modname in ipairs(test_names) do
-      for _,t in ipairs(self:lua_c_module_targets(modname)) do
+      for _,t in ipairs(self:module_targets(modname)) do
          assert(is_target(t))
          t:make()
          table.insert(test_targets, t)
@@ -939,10 +951,11 @@ function BuildContext:test(test_names)
       dirname = self.tmpdir,
       basename = sf("%s_test", self.pd.libname)
    }
+   self:prep_link_targets()
    self:link {
       dst = test_app,
       src = {
-         self:link_targets(),
+         self.link_targets,
          test_targets,
          main_targets
       },
