@@ -86,10 +86,25 @@ _G.require = setup_require(ZZ_PACKAGE, {})
 
 require('globals')
 
-local function sched_main(main)
-   local sched = require('sched')
-   sched(main)
-   sched()
+local function sched_main(M)
+   if type(M) == 'table' and type(M.main) == 'function' then
+      local sched = require('sched')
+      sched(M.main)
+      sched()
+   end
+end
+
+local function run_module(modname)
+   sched_main(lj_require(modname))
+end
+
+local function run_script(path)
+   local chunk, err = loadfile(path)
+   if type(chunk) ~= "function" then
+      print(err)
+   else
+      sched_main(chunk())
+   end
 end
 
 local function require_test(modname)

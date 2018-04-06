@@ -703,7 +703,7 @@ function BuildContext:ldflags()
    return ldflags
 end
 
-function BuildContext:build_main(bootstrap_code)
+function BuildContext:main_targets(name, bootstrap_code)
    local ctx = self
    local zzctx = get_build_context(ZZ_CORE_PACKAGE)
    zzctx:prep_native_targets() -- for libluajit.a cflags
@@ -713,7 +713,7 @@ function BuildContext:build_main(bootstrap_code)
    }
    local main_c = ctx:Target {
       dirname = ctx.tmpdir,
-      basename = "_main.c",
+      basename = sf("%s.c", name),
       depends = main_tpl_c,
       build = function(self)
          ctx:cp {
@@ -724,7 +724,7 @@ function BuildContext:build_main(bootstrap_code)
    }
    local main_o = ctx:Target {
       dirname = ctx.objdir,
-      basename = "_main.o",
+      basename = sf("%s.o", name),
       depends = main_c,
       build = function(self)
          ctx:compile_c {
@@ -734,14 +734,13 @@ function BuildContext:build_main(bootstrap_code)
          }
       end
    }
-   main_o:force_make()
    local main_tpl_lua = ctx:Target {
       dirname = zzctx.srcdir,
       basename = "_main.tpl.lua"
    }
    local main_lua = ctx:Target {
       dirname = ctx.tmpdir,
-      basename = "_main.lua",
+      basename = sf("%s.lua", name),
       depends = main_tpl_lua,
       build = function(self)
          local f = fs.open(self.path, bit.bor(ffi.C.O_CREAT,
@@ -756,7 +755,7 @@ function BuildContext:build_main(bootstrap_code)
    }
    local main_lo = ctx:Target {
       dirname = ctx.objdir,
-      basename = "_main.lo",
+      basename = sf("%s.lo", name),
       depends = main_lua,
       build = function(self)
          ctx:compile_lua {
@@ -766,14 +765,21 @@ function BuildContext:build_main(bootstrap_code)
          }
       end
    }
-   main_lo:force_make()
    return { main_o, main_lo }
 end
 
-function BuildContext:genbootstrap(appname)
+function BuildContext:build_main(bootstrap_code)
+   local main_targets = self:main_targets('_main', bootstrap_code)
+   for _,t in ipairs(main_targets) do
+      t:force_make()
+   end
+   return main_targets
+end
+
+function BuildContext:gen_vfs_mount()
    local code = ''
    if next(self.pd.mounts) then
-      code = code..[[
+      code = [[
          do
             local vfs = require('vfs')
             local pd = require('package')
@@ -781,13 +787,15 @@ function BuildContext:genbootstrap(appname)
          end
 ]]
    end
-   code = code..[[
-      local app_module = lj_require(']]..self:mangle(appname)..[[')
-      if type(app_module)=='table' and type(app_module.main)=='function' then
-         sched_main(app_module.main)
-      end
-]]
    return code
+end
+
+function BuildContext:gen_app_bootstrap(appname)
+   return self:gen_vfs_mount()..sf("run_module('%s')\n", self:mangle(appname))
+end
+
+function BuildContext:gen_run_bootstrap()
+   return self:gen_vfs_mount()..sf("run_script(table.remove(_G.arg,1))")
 end
 
 function BuildContext:prep_app_targets()
@@ -810,7 +818,7 @@ function BuildContext:prep_app_targets()
                app_module_targets
             },
             build = function(self)
-               local bootstrap = ctx:genbootstrap(appname)
+               local bootstrap = ctx:gen_app_bootstrap(appname)
                local main_targets = ctx:build_main(bootstrap)
                ctx:link {
                   dst = self,
@@ -866,53 +874,32 @@ function BuildContext:install()
    end
 end
 
-function BuildContext:run(appname)
-   local ctx = self
-   self:build {
-      recursive = false,
-      apps = false
-   }
-   local path = appname
-   if path:sub(-4) ~= ".lua" then
-      path = path..".lua"
-   end
+function BuildContext:run(path)
    if not fs.exists(path) then
-      path = fs.join(self.srcdir, path)
-   end
-   if not fs.exists(path) then
-      die("cannot find app: %s (%s)", appname, path)
+      die("script not found: %s", path)
    end
    path = fs.realpath(path)
    if path:sub(1,#self.srcdir) ~= self.srcdir then
       die("this app belongs to another package: %s", path)
    end
-   -- convert to package-relative module name
-   appname = path:sub(#self.srcdir+2,-5)
-   local app_targets = self:module_targets(appname)
-   if not app_targets then
-      die("cannot build app target: %s", appname)
-   end
-   local bootstrap = self:genbootstrap(appname)
-   local main_targets = self:build_main(bootstrap)
-   ctx:prep_link_targets()
-   local app = self:Target {
-      dirname = fs.join(self.tmpdir, fs.dirname(appname)),
-      basename = fs.basename(appname),
-      depends = { app_targets, main_targets },
+   local bootstrap = self:gen_run_bootstrap(path)
+   local main_targets = self:main_targets('_run', bootstrap)
+   self:prep_link_targets()
+   local ctx = self
+   local runner = ctx:Target {
+      dirname = ctx.tmpdir,
+      basename = '_run',
+      depends = { ctx.link_targets, main_targets },
       build = function(self)
          ctx:link {
             dst = self,
-            src = {
-               ctx.link_targets,
-               app_targets,
-               main_targets
-            },
+            src = { ctx.link_targets, main_targets },
             ldflags = ctx:ldflags()
          }
       end
    }
-   app:make()
-   system { app.path, unpack(_G.arg, 3) }
+   runner:make()
+   system { runner.path, unpack(_G.arg, 2) }
 end
 
 function BuildContext:find_tests()
@@ -1178,12 +1165,12 @@ end
 
 function handlers.run(args)
    local ap = argparser()
-   ap:add { name = "appname", type = "string" }
+   ap:add { name = "script_path", type = "string" }
    local args = ap:parse(args)
-   if not args.appname then
-      die("missing appname")
+   if not args.script_path then
+      die("missing argument: script path")
    end
-   get_build_context():run(args.appname)
+   get_build_context():run(args.script_path)
 end
 
 function handlers.test(args)

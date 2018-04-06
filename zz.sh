@@ -361,12 +361,7 @@ build_test_modules() {
 
 generate_main() {
   local app="$1"
-  cat <<EOF
-local app_module = require('$(mangle $app)')
-if type(app_module)=='table' and type(app_module.main)=='function' then
-  sched_main(app_module.main)
-end
-EOF
+  echo "run_module('$(mangle $app)')"
 }
 
 build_module_app() {
