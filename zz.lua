@@ -903,7 +903,7 @@ function BuildContext:run(path)
       end
    }
    runner:make()
-   system { runner.path, unpack(_G.arg, 2) }
+   process.system { runner.path, unpack(_G.arg, 2) }
 end
 
 function BuildContext:find_tests()
@@ -953,7 +953,7 @@ function BuildContext:test(test_names)
       end
    }
    testrunner:make()
-   system { testrunner.path, unpack(test_paths) }
+   process.system { testrunner.path, unpack(test_paths) }
 end
 
 local function rmpath(path)
