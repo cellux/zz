@@ -795,7 +795,11 @@ function BuildContext:gen_app_bootstrap(appname)
 end
 
 function BuildContext:gen_run_bootstrap()
-   return self:gen_vfs_mount()..sf("run_script(table.remove(_G.arg,1))")
+   return self:gen_vfs_mount()..sf("run_script(table.remove(_G.arg,1))\n")
+end
+
+function BuildContext:gen_test_bootstrap()
+   return self:gen_vfs_mount().."run_tests(_G.arg)\n"
 end
 
 function BuildContext:prep_app_targets()
@@ -903,12 +907,7 @@ function BuildContext:run(path)
 end
 
 function BuildContext:find_tests()
-   local function strip(test_path)
-      local basename = fs.basename(test_path)
-      local testname = basename:sub(1,-5) -- strip ".lua" extension
-      return testname
-   end
-   return util.map(strip, fs.glob(fs.join(self.srcdir, "*_test.lua")))
+   return fs.glob(fs.join(self.srcdir, "*_test.lua"))
 end
 
 function BuildContext:test(test_names)
@@ -916,43 +915,45 @@ function BuildContext:test(test_names)
       recursive = true,
       apps = false
    }
+   local test_paths
    if not test_names or #test_names == 0 then
-      test_names = self:find_tests()
+      test_paths = self:find_tests()
    else
-      local function sanitize(testname)
-         if testname:sub(-5) ~= "_test" then
-            testname = testname .. "_test"
+      local function resolve(test_name)
+         local test_path
+         if test_name:sub(-4) == ".lua" then
+            test_path = test_name
+         else
+            if test_name:sub(-5) ~= "_test" then
+               test_name = test_name.."_test"
+            end
+            test_path = sf("%s/%s.lua", self.srcdir, test_name)
          end
-         return testname
+         if not fs.exists(test_path) then
+            die("cannot find test: %s", test_path)
+         end
+         return fs.realpath(test_path)
       end
-      test_names = util.map(sanitize, test_names)
+      test_paths = util.map(resolve, test_names)
    end
-   local test_targets = {}
-   local bootstrap = {}
-   for _,modname in ipairs(test_names) do
-      for _,t in ipairs(self:module_targets(modname)) do
-         assert(is_target(t))
-         t:make()
-         table.insert(test_targets, t)
-      end
-      table.insert(bootstrap, sf("require_test('%s')\n", modname))
-   end
-   local main_targets = self:build_main(table.concat(bootstrap))
-   local test_app = self:Target {
-      dirname = self.tmpdir,
-      basename = sf("%s_test", self.pd.libname)
-   }
+   local bootstrap = self:gen_test_bootstrap()
+   local main_targets = self:main_targets('_test', bootstrap)
    self:prep_link_targets()
-   self:link {
-      dst = test_app,
-      src = {
-         self.link_targets,
-         test_targets,
-         main_targets
-      },
-      ldflags = self:ldflags()
+   local ctx = self
+   local testrunner = ctx:Target {
+      dirname = ctx.tmpdir,
+      basename = '_test',
+      depends = { ctx.link_targets, main_targets },
+      build = function(self)
+         ctx:link {
+            dst = self,
+            src = { ctx.link_targets, main_targets },
+            ldflags = ctx:ldflags()
+         }
+      end
    }
-   system { test_app.path }
+   testrunner:make()
+   system { testrunner.path, unpack(test_paths) }
 end
 
 local function rmpath(path)

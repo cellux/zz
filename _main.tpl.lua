@@ -107,14 +107,29 @@ local function run_script(path)
    end
 end
 
-local function require_test(modname)
-  local ok, err = pcall(require, modname)
-  if ok then
-     pf(modname..': OK')
-  else
-     pf(modname..': FAIL')
-     print(err)
-  end
+local function run_tests(paths)
+   local fs = require('fs')
+   local function strip(test_path)
+      local basename = fs.basename(test_path)
+      local testname = basename:sub(1,-5) -- strip ".lua" extension
+      return testname
+   end
+   for _,path in ipairs(paths) do
+      local testname = strip(path)
+      local chunk, err = loadfile(path)
+      if type(chunk) ~= "function" then
+         pf(testname..': COMPILE ERROR')
+         print(err)
+      else
+         local ok, err = pcall(chunk)
+         if ok then
+            pf(testname..': OK')
+         else
+            pf(testname..': FAIL')
+            print(err)
+         end
+      end
+   end
 end
 
 -- build system will inject bootstrap code here

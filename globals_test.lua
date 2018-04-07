@@ -22,10 +22,11 @@ process.waitpid(pid)
 
 -- ef
 
+local test_path = debug.getinfo(1,"S").short_src
 local status, err = pcall(function() ef("Hello, %s", "world") end)
 assert.equals(status, false)
 assert.type(err, "string")
-assert.equals(err, "./globals_test.lua:25: Hello, world")
+assert.equals(err, sf("%s:26: Hello, world", test_path))
 
 -- if we throw an error from a coroutine running inside the scheduler,
 -- we'd like to get a valid backtrace which correctly shows where the
@@ -42,8 +43,8 @@ assert.type(err, "string")
 --
 -- the second part contains the global (non-coroutine-specific)
 -- traceback appended by error()
-local expected = [[./globals_test.lua:35: Hello, world
+local expected = test_path..[[:36: Hello, world
 stack traceback:
-	./globals_test.lua:35: in function 'throwit'
-	./globals_test.lua:37: in function <./globals_test.lua:37>]]
+	]]..test_path..[[:36: in function 'throwit'
+	]]..test_path..[[:38: in function <]]..test_path..[[:38>]]
 assert.equals(err:sub(1,#expected), expected)
