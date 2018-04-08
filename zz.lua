@@ -804,8 +804,7 @@ end
 
 function BuildContext:prep_app_targets()
    if not self.app_targets then
-      local ctx = self
-      ctx:prep_link_targets()
+      self:prep_link_targets()
       local targets = {}
       for _,appname in ipairs(self.pd.apps) do
          local app_module_targets = {}
@@ -814,16 +813,18 @@ function BuildContext:prep_app_targets()
             -- we shall build it separately
             app_module_targets = self:module_targets(appname)
          end
-         local apptarget = self:Target {
+         local bootstrap = self:gen_app_bootstrap(appname)
+         local main_targets = self:main_targets('_main', bootstrap)
+         local ctx = self
+         local app = self:Target {
             dirname = self.bindir,
             basename = appname,
             depends = {
-               ctx.link_targets,
-               app_module_targets
+               self.link_targets,
+               app_module_targets,
+               main_targets
             },
             build = function(self)
-               local bootstrap = ctx:gen_app_bootstrap(appname)
-               local main_targets = ctx:build_main(bootstrap)
                ctx:link {
                   dst = self,
                   src = {
@@ -835,7 +836,7 @@ function BuildContext:prep_app_targets()
                }
             end
          }
-         table.insert(targets, apptarget)
+         table.insert(targets, app)
       end
       self.app_targets = targets
    end
