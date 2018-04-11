@@ -16,7 +16,6 @@ PACKAGE_MODULES=(
   errno
   fs
   globals
-  iconv
   inspect
   mm
   msgpack
