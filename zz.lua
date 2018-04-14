@@ -8,7 +8,6 @@ local re = require('re')
 local inspect = require('inspect')
 local util = require('util')
 local bcsave = require('jit.bcsave')
-local sha1 = require('sha1')
 local ffi = require('ffi')
 local adt = require('adt')
 
@@ -365,6 +364,7 @@ end
 
 function BuildContext:mangle(name)
    -- generate globally unique name for a zz package module
+   local sha1 = require('sha1')
    return 'zz_'..sha1(sf("%s/%s", self.pd.package, name))
 end
 
