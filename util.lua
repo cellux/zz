@@ -282,8 +282,8 @@ end
 
 function M.reverse(t)
    local rv = {}
-   for _,v in ipairs(t) do
-      table.insert(rv, 1, v)
+   for i=#t,1,-1 do
+      table.insert(rv, t[i])
    end
    return rv
 end
