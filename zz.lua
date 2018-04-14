@@ -703,6 +703,36 @@ function BuildContext:ldflags()
    return ldflags
 end
 
+function BuildContext:gen_modname_map()
+   -- generate a table which maps fully qualified module names to
+   -- their mangled versions
+   local map = {}
+   local function add_module_names_exported_from(ctx)
+      local package_name = ctx.pd.package
+      for _,m in ipairs(ctx.pd.exports) do
+         local mangled = ctx:mangle(m)
+         map[package_name..'/'..m] = mangled
+      end
+   end
+   self:walk_imports(add_module_names_exported_from)
+   local items = {}
+   for k,v in pairs(map) do
+      table.insert(items, sf('["%s"]="%s"', k, v))
+   end
+   return sf('{%s}', table.concat(items, ','))
+end
+
+function BuildContext:gen_preamble()
+   local lines = {}
+   local function add(...)
+      table.insert(lines, sf(...).."\n")
+   end
+   add("local ZZ_PACKAGE = '%s'", self.pd.package)
+   add("local ZZ_CORE_PACKAGE = '%s'", ZZ_CORE_PACKAGE)
+   add("local ZZ_MODNAME_MAP = %s", self:gen_modname_map())
+   return table.concat(lines)
+end
+
 function BuildContext:main_targets(name, bootstrap_code)
    local ctx = self
    local zzctx = get_build_context(ZZ_CORE_PACKAGE)
@@ -746,8 +776,7 @@ function BuildContext:main_targets(name, bootstrap_code)
          local f = fs.open(self.path, bit.bor(ffi.C.O_CREAT,
                                               ffi.C.O_WRONLY,
                                               ffi.C.O_TRUNC))
-         f:write(sf("local ZZ_PACKAGE = '%s'\n", ctx.pd.package))
-         f:write(sf("local ZZ_CORE_PACKAGE = '%s'\n", ZZ_CORE_PACKAGE))
+         f:write(ctx:gen_preamble())
          f:write(fs.readfile(main_tpl_lua.path))
          f:write(bootstrap_code)
          f:close()

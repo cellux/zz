@@ -224,6 +224,11 @@ compile_main() {
   {
     echo "local ZZ_PACKAGE = '$PACKAGE'"
     echo "local ZZ_CORE_PACKAGE = '$PACKAGE'"
+    echo "local ZZ_MODNAME_MAP = {"
+    for m in $(package_modules) package; do
+      echo "['$PACKAGE/$m']='$(mangle $m)',"
+    done
+    echo "}"
     cat _main.tpl.lua
     cat # inject main program
   } > "$TMPDIR/_main.lua"

@@ -1,12 +1,8 @@
--- at the beginning, we still have LuaJIT's require which doesn't mangle module names
--- thus we have to import the sha1 module by its real (mangled) name
-local sha1 = require('zz_51d23c0856aa2da92d0b3f21308af0b55ba313dd')
-
-local function mangle(pkgname, modname)
-   return 'zz_'..sha1(pkgname..'/'..modname)
-end
-
 local lj_require = _G.require
+
+local function zz_require(modname)
+   return lj_require(ZZ_MODNAME_MAP[modname] or modname)
+end
 
 local function reverse(t)
    local rv = {}
@@ -20,14 +16,14 @@ local function setup_require(pname, seen)
    if seen[pname] then return end
    seen[pname] = true
    -- load package descriptor
-   local pd = lj_require(mangle(pname, 'package'))
+   local pd = zz_require(pname..'/package')
    local loaders = {}
    pd.imports = pd.imports or {}
    local imports_seen = {}
    local function process_import(dname)
       if not imports_seen[dname] then
          setup_require(dname, seen) -- generates dd.require()
-         local dd = lj_require(mangle(dname, 'package'))
+         local dd = zz_require(dname..'/package')
          -- modules exported by imported packages should be
          -- requireable by their short name
          dd.exports = dd.exports or {}
@@ -55,7 +51,7 @@ local function setup_require(pname, seen)
    local pd_env = setmetatable({ require = pd.require }, { __index = _G })
    pd.exports = pd.exports or {}
    local function process_export(m)
-      local mangled = mangle(pname, m)
+      local mangled = ZZ_MODNAME_MAP[pname..'/'..m]
       local loaded = nil
       local m_loader = function()
          if not loaded then
