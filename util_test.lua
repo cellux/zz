@@ -276,3 +276,6 @@ assert(not util.contains('x',{'a','b','c','d','e','f'}))
 assert(util.contains('a',{'a','b','c','d','e','f'}))
 assert(util.contains('d',{'a','b','c','d','e','f'}))
 assert(util.contains('f',{'a','b','c','d','e','f'}))
+
+-- reverse
+assert.equals(util.reverse({1,2,3,4}), {4,3,2,1})

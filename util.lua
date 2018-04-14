@@ -280,4 +280,12 @@ function M.contains(x, t)
    return M.indexof(x, t) ~= nil
 end
 
+function M.reverse(t)
+   local rv = {}
+   for _,v in ipairs(t) do
+      table.insert(rv, 1, v)
+   end
+   return rv
+end
+
 return M
