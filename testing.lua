@@ -2,6 +2,8 @@ local util = require('util')
 
 local M = {}
 
+-- Test
+
 local Test = util.Class()
 
 function Test:create(name, testfn, opts)
@@ -36,6 +38,23 @@ function Test:run(tc)
    self.ok, self.err = pcall(self.testfn, tc)
 end
 
+-- TestContext
+
+local TestContext = util.Class()
+
+function TestContext:create()
+   return {
+      _nextid = 0
+   }
+end
+
+function TestContext:nextid()
+   self._nextid = self._nextid + 1
+   return self._nextid
+end
+
+-- TestSuite
+
 local TestSuite = util.Class()
 
 function TestSuite:create(name)
@@ -52,10 +71,12 @@ end
 function TestSuite:add(name, testfn, opts)
    if not testfn then
       local ts = TestSuite(name)
+      ts.parent = self
       table.insert(self.suites, ts)
       return ts
    else
       local t = Test(name, testfn, opts)
+      t.parent = self
       table.insert(self.tests, t)
       return t
    end
@@ -69,61 +90,66 @@ function TestSuite:nosched(name, testfn)
    return self:add(name, testfn, { nosched = true })
 end
 
-function TestSuite:walk(process)
+function TestSuite:walk(process, filter)
    for _,ts in ipairs(self.suites) do
-      ts:walk(process)
+      ts:walk(process, filter)
    end
    for _,t in ipairs(self.tests) do
-      process(t)
+      if filter == nil or filter(t) then
+         process(t)
+      end
    end
 end
 
 function TestSuite:run(tc)
-   self:walk(function(t)
-      if t:is_nosched() then
-         t:run(tc)
+   tc = tc or TestContext()
+   local total = 0
+   local function count_test(t)
+      total = total + 1
+   end
+   self:walk(count_test)
+   local remaining = total
+   local passed = 0
+   local failed = 0
+   local function report(t)
+      if t.ok then
+         passed = passed + 1
+      else
+         failed = failed + 1
       end
-   end)
+      remaining = remaining - 1
+      io.stderr:write(sf("\r%d/%d tests passed.", passed, total))
+      if remaining == 0 then
+         io.stderr:write("\n")
+         local function report_failure(t)
+            io.stderr:write(sf("%s FAILED:\n%s\n", t.name, t.err))
+         end
+         self:walk(report_failure, function(t) return not t.ok end)
+      end
+   end
+   local function run_test(t)
+      t:run(tc)
+      report(t)
+   end
+   self:walk(run_test, function(t) return t:is_nosched() end)
    local sched = require('sched')
-   self:walk(function(t)
-      if not t:is_nosched() then
-         local function runner()
-            t:run(tc)
-         end
-         if t:is_exclusive() then
-            sched.exclusive(runner)
-         else
-            sched(runner)
-         end
+   local function sched_test(t)
+      if t:is_exclusive() then
+         sched.exclusive(run_test, t)
+      else
+         sched(run_test, t)
       end
-   end)
+   end
+   self:walk(sched_test, function(t) return not t:is_nosched() end)
    sched()
-   self:walk(function(t)
-      pf("%s %s", t.ok and "OK" or "FAIL", t.name)
-      if not t.ok then
-         print(t.err)
-      end
-   end)
 end
 
-local TestContext = util.Class()
-
-function TestContext:create()
-   return {
-      _nextid = 0
-   }
-end
-
-function TestContext:nextid()
-   self._nextid = self._nextid + 1
-   return self._nextid
-end
+M.TestSuite = TestSuite
 
 local root = TestSuite()
 
 function M.run_tests()
-   local tc = TestContext()
-   root:run(tc)
+   root:run()
 end
 
 local M_mt = {}
