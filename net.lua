@@ -293,7 +293,7 @@ function Socket_mt:bind(sockaddr)
 end
 
 function Socket_mt:listen(n)
-   n = n or 16
+   n = n or 64
    return util.check_errno("listen", ffi.C.listen(self.fd, n))
 end
 
