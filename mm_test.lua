@@ -1,49 +1,51 @@
+local testing = require('testing')('mm')
 local mm = require('mm')
 local sched = require('sched')
 local util = require('util')
 local assert = require('assert')
 
--- BlockPool
+testing("BlockPool", function()
+   local pool = mm.BlockPool(2^16) -- allocate memory in blocks of 2^16
 
-local pool = mm.BlockPool(2^16) -- allocate memory in blocks of 2^16
+   local free_blocks = {}
 
-local free_blocks = {}
-
-local function pool_get(size)
-   local ptr, block_size = pool:get(size)
-   assert.equals(block_size, util.next_power_of_2(size))
-   if free_blocks[block_size] and free_blocks[block_size] > 0 then
-      free_blocks[block_size] = free_blocks[block_size] - 1
+   local function pool_get(size)
+      local ptr, block_size = pool:get(size)
+      assert.equals(block_size, util.next_power_of_2(size))
+      if free_blocks[block_size] and free_blocks[block_size] > 0 then
+         free_blocks[block_size] = free_blocks[block_size] - 1
+      end
+      return ptr, block_size
    end
-   return ptr, block_size
-end
 
-local function pool_ret(ptr, block_size)
-   pool:ret(ptr, block_size)
-   if not free_blocks[block_size] then
-      free_blocks[block_size] = 0
+   local function pool_ret(ptr, block_size)
+      pool:ret(ptr, block_size)
+      if not free_blocks[block_size] then
+         free_blocks[block_size] = 0
+      end
+      free_blocks[block_size] = free_blocks[block_size] + 1
    end
-   free_blocks[block_size] = free_blocks[block_size] + 1
-end
 
-local function get_ret()
-   local size = math.floor(math.random(256))
-   local ptr, block_size = pool_get(size)
-   for i=1,math.floor(math.random(10)) do
-      sched.yield()
+   local function get_ret()
+      local size = math.floor(math.random(256))
+      local ptr, block_size = pool_get(size)
+      for i=1,math.floor(math.random(10)) do
+         sched.yield()
+      end
+      pool_ret(ptr, block_size)
    end
-   pool_ret(ptr, block_size)
-end
 
-for i=1,1000 do
-   sched(get_ret)
-end
-sched()
+   local threads = {}
+   for i=1,1000 do
+      table.insert(threads, sched(get_ret))
+   end
+   sched.join(threads)
 
-assert.equals(pool:arena_allocated_bytes(), pool:ptrpool_allocated_bytes())
+   assert.equals(pool:arena_allocated_bytes(), pool:ptrpool_allocated_bytes())
 
-local total = 0
-for block_size, count in pairs(free_blocks) do
-   total = total + block_size * count
-end
-assert.equals(pool:arena_allocated_bytes(), total)
+   local total = 0
+   for block_size, count in pairs(free_blocks) do
+      total = total + block_size * count
+   end
+   assert.equals(pool:arena_allocated_bytes(), total)
+end)

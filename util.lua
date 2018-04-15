@@ -89,8 +89,8 @@ end
 
 function M.Class(parent)
    local class = {}
-   local mt = { __index = parent }
-   function mt:__call(...)
+   local class_mt = { __index = parent }
+   function class_mt:__call(...)
       local self = {}
       if class.create then
          self = class:create(...)
@@ -100,9 +100,22 @@ function M.Class(parent)
             self = arg
          end
       end
-      return setmetatable(self, { __index = class })
+      local self_mt = { __index = class }
+      if type(self) == "table" then
+         local mt_keys = {}
+         for k,v in pairs(self) do
+            if type(k)=="string" and k:sub(1,2) == "__" then
+               table.insert(mt_keys, k)
+               self_mt[k] = v
+            end
+         end
+         for _,k in ipairs(mt_keys) do
+            self[k] = nil
+         end
+      end
+      return setmetatable(self, self_mt)
    end
-   return setmetatable(class, mt)
+   return setmetatable(class, class_mt)
 end
 
 function M.chain(self, index)

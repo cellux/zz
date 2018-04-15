@@ -118,14 +118,13 @@ local function run_tests(paths)
          print(err)
       else
          local ok, err = pcall(chunk)
-         if ok then
-            pf(testname..': OK')
-         else
-            pf(testname..': FAIL')
+         if not ok then
+            pf(testname..': LOAD ERROR')
             print(err)
          end
       end
    end
+   require('testing').run_tests()
 end
 
 -- build system will inject bootstrap code here

@@ -1,3 +1,5 @@
+ZZPATH ?= $(HOME)/zz
+
 .PHONY: install
 install:
 	@./zz.sh install
@@ -6,10 +8,6 @@ install:
 build:
 	@./zz.sh build
 
-.PHONY: test
-test:
-	@./zz.sh test
-
 .PHONY: clean
 clean:
 	@./zz.sh clean
@@ -17,3 +15,7 @@ clean:
 .PHONY: distclean
 distclean:
 	@./zz.sh distclean
+
+.PHONY: test
+test: install
+	@$(ZZPATH)/bin/zz test

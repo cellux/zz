@@ -1,4 +1,7 @@
+local testing = require('testing')
 local epoll = require('epoll')
 
-local poller = epoll.create()
-poller:close()
+testing("epoll", function()
+   local poller = epoll.create()
+   poller:close()
+end)

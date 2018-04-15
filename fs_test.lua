@@ -1,3 +1,4 @@
+local testing = require('testing')('fs')
 local fs = require('fs')
 local assert = require('assert')
 local time = require('time')
@@ -25,7 +26,7 @@ local function with_tmpdir(cb)
    end
 end
 
-local function test_read()
+testing("read", function()
    -- read whole file at once
    local f = fs.open('testdata/hello.txt')
    local contents = f:read()
@@ -54,17 +55,17 @@ local function test_read()
    -- further reads return nil
    assert(f:read(4096)==nil)
    f:close()
-end
+end)
 
-local function test_write()
+testing("write", function()
    with_tmpdir(function(tmpdir)
       local tmp = fs.join(tmpdir, 'arborescence.jpg')
       fs.writefile(tmp, fs.readfile('testdata/arborescence.jpg'))
       assert.equals(fs.readfile(tmp), fs.readfile('testdata/arborescence.jpg'))
    end)
-end
+end)
 
-local function test_seek()
+testing("seek", function()
    -- seek from start
    local f = fs.open('testdata/hello.txt')
    assert(f:seek(5)==5)
@@ -86,9 +87,9 @@ local function test_seek()
    local contents = f:read(5)
    assert(contents=="world")
    f:close()
-end
+end)
 
-local function test_mkstemp()
+testing("mkstemp", function()
    local f, path = fs.mkstemp()
    assert(type(path)=="string")
    assert(fs.exists(path))
@@ -102,23 +103,23 @@ local function test_mkstemp()
    f:close()
    fs.unlink(path)
    assert(not fs.exists(path))
-end
+end)
 
-local function test_exists()
+testing("exists", function()
    assert(fs.exists('testdata/hello.txt'))
    assert(not fs.exists('non-existing-file'))
-end
+end)
 
-local function test_chmod()
+testing:exclusive("chmod", function()
    fs.chmod("testdata/hello.txt", util.oct("755"))
    assert.equals(fs.stat("testdata/hello.txt").perms, util.oct("755"))
    assert(fs.is_executable("testdata/hello.txt"))
    fs.chmod("testdata/hello.txt", util.oct("644"))
    assert(fs.stat("testdata/hello.txt").perms == util.oct("644"))
    assert(not fs.is_executable("testdata/hello.txt"))
-end
+end)
 
-local function test_readable_writable_executable()
+testing:exclusive("readable_writable_executable", function()
    local hello_txt_perms = util.oct("644")
    fs.chmod("testdata/hello.txt", hello_txt_perms)
 
@@ -147,9 +148,9 @@ local function test_readable_writable_executable()
    assert(fs.is_executable("testdata/hello.txt"))
 
    fs.chmod("testdata/hello.txt", hello_txt_perms)
-end
+end)
 
-local function test_stat()
+testing:exclusive("stat", function()
    local s = fs.stat("testdata/hello.txt")
    assert.type(s.dev, 'number')
    assert.type(s.ino, 'number')
@@ -177,9 +178,9 @@ local function test_stat()
    fs.chmod("testdata/hello.txt", s.perms)
    local now = math.floor(time.time())
    assert(math.abs(now-s.ctime) <= 1.0, sf("time.time()=%d, s.ctime=%d, difference > 1.0 seconds", now, s.ctime))
-end
+end)
 
-local function test_type()
+testing("type", function()
    assert(fs.type("testdata/hello.txt")=="reg")
    assert(fs.is_reg("testdata/hello.txt"))
    
@@ -207,9 +208,9 @@ local function test_type()
    assert(fs.is_writable("testdata/hello.txt.symlink"))
    assert(not fs.is_readable("testdata/bad.symlink"))
    assert(not fs.is_writable("testdata/bad.symlink"))
-end
+end)
 
-local function test_readdir()
+testing("readdir", function()
    local expected_entries = {
       '.',
       '..',
@@ -245,33 +246,33 @@ local function test_readdir()
    end
    table.sort(entries)
    assert.equals(entries, expected_entries)
-end
+end)
 
-local function test_basename()
+testing("basename", function()
    assert.equals(fs.basename("testdata/hello.txt"), "hello.txt")
    assert.equals(fs.basename("/hello.txt"), "hello.txt")
    assert.equals(fs.basename("./hello.txt"), "hello.txt")
    assert.equals(fs.basename("hello.txt"), "hello.txt")
-end
+end)
 
-local function test_dirname()
+testing("dirname", function()
    assert.equals(fs.dirname("/"), "/")
    assert.equals(fs.dirname("."), ".")
    assert.equals(fs.dirname("./"), ".")
    assert.equals(fs.dirname("./hello.txt"), ".")
    assert.equals(fs.dirname("testdata/hello.txt"), "testdata")
    assert.equals(fs.dirname("x"), ".")
-end
+end)
 
-local function test_join()
+testing("join", function()
    assert.equals(fs.join(), nil)
    assert.equals(fs.join("abc"), "abc")
    assert.equals(fs.join("abc","def"), "abc/def")
    assert.equals(fs.join("abc",".", "def"), "abc/./def")
    assert.equals(fs.join("abc","/def"), "abc//def")
-end
+end)
 
-local function test_stream_read()
+testing("stream.read", function()
    local f = fs.open("testdata/arborescence.jpg")
    local s = stream(f)
    assert(not s:eof())
@@ -351,9 +352,9 @@ local function test_stream_read()
    s:read_until("\x0d\x0a\x0d\x0a")
    assert.equals(s:readln(), '<HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">')
    f:close()
-end
+end)
 
-local function test_stream_write()
+testing("stream.write", function()
    with_tmpdir(function(tmpdir)
       local fin = fs.open("testdata/arborescence.jpg")
       local sin = stream(fin)
@@ -368,9 +369,9 @@ local function test_stream_write()
       fin:close()
       assert.equals(fs.readfile("testdata/arborescence.jpg"), fs.readfile(fout_path))
    end)
-end
+end)
 
-local function test_symlink_readlink_realpath()
+testing("symlink_readlink_realpath", function()
    local rel = "testdata/arborescence.jpg"
    local abs = fs.realpath(rel)
    assert(abs ~= rel)
@@ -386,9 +387,9 @@ local function test_symlink_readlink_realpath()
       fs.unlink(tmp)
       assert(not fs.exists(tmp))
    end)
-end
+end)
 
-local function test_Path()
+testing("Path", function()
    assert.throws(function () fs.Path() end, "invalid path: nil")
    assert.throws(function () fs.Path(nil) end, "invalid path: nil")
    assert.throws(function () fs.Path("") end, "invalid path: ''")
@@ -410,9 +411,9 @@ local function test_Path()
    assert.equals(tostring(fs.Path("abc/def")), "abc/def")
    assert.equals(fs.Path("abc/def").components, {"abc","def"})
    assert.equals(tostring(fs.Path{"abc","def"}), "abc/def")
-end
+end)
 
-local function test_mkdir_rmdir()
+testing("mkdir_rmdir", function()
    with_tmpdir(function(tmpdir)
       local foo_path = fs.join(tmpdir, "foo")
       assert.equals(0, fs.mkdir(foo_path))
@@ -423,9 +424,9 @@ local function test_mkdir_rmdir()
       assert(not fs.is_dir(foo_path))
       assert(not fs.exists(foo_path))
    end)
-end
+end)
 
-local function test_mkpath_rmpath()
+testing:exclusive("mkpath_rmpath", function()
    with_tmpdir(function(tmpdir)
       local old_umask = process.umask(util.oct("022"))
       local test_path = fs.join(tmpdir, "zsuba/guba/csicseri")
@@ -441,9 +442,9 @@ local function test_mkpath_rmpath()
       assert(not fs.is_dir(fs.join(tmpdir, "zsuba")))
       process.umask(old_umask)
    end)
-end
+end)
 
-local function test_touch()
+testing:exclusive("touch", function()
    with_tmpdir(function(tmpdir)
       local old_umask = process.umask(util.oct("022"))
       local test_path = fs.join(tmpdir, "touch")
@@ -452,9 +453,9 @@ local function test_touch()
       assert.equals(fs.stat(test_path).perms, util.oct("644"))
       process.umask(old_umask)
    end)
-end
+end)
 
-local function test_glob()
+testing("glob", function()
    assert.equals(fs.glob("testdata/*.jpg"), {
      "testdata/arborescence.jpg"
    })
@@ -462,35 +463,4 @@ local function test_glob()
      "testdata/hello.txt",
      "testdata/www.google.com.txt"
    })
-end
-
-local function test()
-   test_read()
-   test_write()
-   test_seek()
-   test_mkstemp()
-   test_exists()
-   test_chmod()
-   test_readable_writable_executable()
-   test_stat()
-   test_type()
-   test_readdir()
-   test_basename()
-   test_dirname()
-   test_join()
-   test_stream_read()
-   test_stream_write()
-   test_symlink_readlink_realpath()
-   test_Path()
-   test_mkdir_rmdir()
-   test_mkpath_rmpath()
-   test_touch()
-   test_glob()
-end
-
--- async
-sched(test)
-sched()
-
--- sync
-test()
+end)

@@ -168,6 +168,10 @@ local function Scheduler() -- scheduler constructor
       return { r = r, data = data }
    end
 
+   -- if a thread is scheduled as exclusive, no other runnables will
+   -- be resumed until it finishes
+   local exclusive_threads = {}
+
    -- sleeping threads are waiting for their time to come
    -- the list is ordered by wake-up time
    local sleeping = adt.OrderedList(function(st) return st.time end)
@@ -351,27 +355,39 @@ local function Scheduler() -- scheduler constructor
             local r, data = runnable.r, runnable.data
             local is_background = (type(r)=="table")
             local t = is_background and r[1] or r
-            local ok, rv = coroutine.resume(t, data)
-            local status = coroutine.status(t)
-            if status == "suspended" then
-               if type(rv) == "number" and rv > 0 then
-                  -- the coroutine shall be resumed at the given time
-                  sleeping:push(SleepingRunnable(r, rv))
-               elseif rv then
-                  -- rv is the evtype which shall wake up this thread
-                  add_waiting(rv, r)
-               else
-                  -- the coroutine shall be resumed in the next tick
-                  runnables_next:push(Runnable(r, nil))
-               end
-            elseif status == "dead" then
-               if not ok then
-                  error(debug.traceback(t, rv), 0)
-               else
-                  -- the coroutine finished its execution
-               end
+            if #exclusive_threads > 0 and exclusive_threads[1] ~= t then
+               runnables_next:push(runnable)
             else
-               ef("unhandled status returned from coroutine.status(): %s", status)
+               local ok, rv = coroutine.resume(t, data)
+               local status = coroutine.status(t)
+               if status == "suspended" then
+                  if type(rv) == "number" and rv > 0 then
+                     -- the coroutine shall be resumed at the given time
+                     sleeping:push(SleepingRunnable(r, rv))
+                  elseif rv then
+                     -- rv is the evtype which shall wake up this thread
+                     add_waiting(rv, r)
+                  else
+                     -- the coroutine shall be resumed in the next tick
+                     -- it already consumed data, so no need to pass again
+                     runnables_next:push(Runnable(r, nil))
+                  end
+               elseif status == "dead" then
+                  if not ok then
+                     error(debug.traceback(t, rv), 0)
+                  else
+                     -- the coroutine finished its execution
+                     if #exclusive_threads > 0 and exclusive_threads[1] == t then
+                        table.remove(exclusive_threads, 1)
+                     end
+                     -- notify runnables waiting for its termination
+                     if waiting[t] then
+                        self.emit(t, rv or 0)
+                     end
+                  end
+               else
+                  ef("unhandled status returned from coroutine.status(): %s", status)
+               end
             end
          end
          runnables = runnables_next
@@ -422,6 +438,7 @@ local function Scheduler() -- scheduler constructor
          -- add fn to the list of runnable threads
          local t = coroutine.create(to_function(fn))
          runnables:push(Runnable(t, data))
+         return t
       else
          -- enter the event loop, continue scheduling until there is
          -- work to do. when the event loop exits, cleanup and destroy
@@ -473,6 +490,12 @@ local function Scheduler() -- scheduler constructor
       runnables:push(Runnable({t}, data))
    end
 
+   function self.exclusive(fn, data)
+      local t = self.sched(fn, data)
+      table.insert(exclusive_threads, t)
+      return t
+   end
+
    self.yield = coroutine.yield
    self.wait = coroutine.yield
 
@@ -483,6 +506,25 @@ local function Scheduler() -- scheduler constructor
    function self.emit(evtype, evdata)
       assert(evdata ~= nil, "evdata must be non-nil")
       event_queue:push({ evtype, evdata })
+   end
+
+   function self.join(threadlist)
+      if type(threadlist) == "thread" then
+         threadlist = { threadlist }
+      end
+      local count = #threadlist
+      local all_done = self.make_event_id()
+      local function thread_is_dead(rv)
+         count = count -1
+         if count == 0 then
+            self.emit(all_done, 0)
+         end
+         return OFF
+      end
+      for _,t in ipairs(threadlist) do
+         self.on(t, thread_is_dead)
+      end
+      self.wait(all_done)
    end
 
    function self.quit(evdata)
