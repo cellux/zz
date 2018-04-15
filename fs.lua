@@ -292,6 +292,9 @@ end
 function File_mt:stream_impl(stream)
    local f = self
    local eof = false
+   function stream:close()
+      return f:close()
+   end
    function stream:eof()
       return eof and not stream.read_buffer
    end

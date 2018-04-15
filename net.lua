@@ -482,6 +482,9 @@ end
 function Socket_mt:stream_impl(stream)
    local sock = self
    local eof = false
+   function stream:close()
+      return sock:close()
+   end
    function stream:eof()
       return eof and not stream.read_buffer
    end

@@ -2,7 +2,7 @@ local testing = require('testing')('stream')
 local stream = require('stream')
 local assert = require('assert')
 
-testing("memory streams", function()
+testing("memory streams (fifos)", function()
    local s = stream()
 
    assert(s:eof())

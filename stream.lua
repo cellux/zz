@@ -9,6 +9,10 @@ M.READ_BLOCK_SIZE = 4096
 
 local BaseStream = util.Class()
 
+function BaseStream:close()
+   ef("to be implemented")
+end
+
 function BaseStream:eof()
    ef("to be implemented")
 end
