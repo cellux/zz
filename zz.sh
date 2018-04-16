@@ -34,6 +34,7 @@ PACKAGE_MODULES=(
   trigger
   uri
   util
+  vfs
   zz
 )
 PACKAGE_LIBS=(zz luajit cmp nanomsg)
