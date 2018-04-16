@@ -1,7 +1,6 @@
 local ffi = require('ffi')
 local adt = require('adt')
 local time = require('time')
-local mm = require('mm')
 local nn = require('nanomsg')
 local msgpack = require('msgpack')
 local inspect = require('inspect')
