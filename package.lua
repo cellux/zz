@@ -256,6 +256,7 @@ P.exports = {
    "sha1",
    "signal",
    "stream",
+   "testing",
    "time",
    "trigger",
    "uri",
