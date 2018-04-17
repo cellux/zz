@@ -7,12 +7,12 @@
 
 bool zz_cmp_buffer_reader(struct cmp_ctx_s *ctx, void *data, size_t limit) {
   zz_cmp_buffer_state *state = (zz_cmp_buffer_state*) ctx->buf;
-  if (state->pos >= state->buffer->size) {
+  if (state->pos >= state->buffer->len) {
     return false;
   }
-  size_t left_in_buf = state->buffer->size - state->pos;
+  size_t left_in_buf = state->buffer->len - state->pos;
   size_t bytes_to_read = MIN(left_in_buf, limit);
-  memcpy(data, state->buffer->data + state->pos, bytes_to_read);
+  memcpy(data, state->buffer->ptr + state->pos, bytes_to_read);
   state->pos += bytes_to_read;
   return bytes_to_read == limit;
 }

@@ -214,7 +214,7 @@ function Context_mt:write(o)
       -- pack pointers by casting them to size_t
       self:write_uint(o)
    elseif buffer.is_buffer(o) then
-      self:write_bin(o:ptr(), o:size())
+      self:write_bin(o.ptr, o.len)
    else
       ef("cannot serialize object %s", o)
    end
@@ -281,10 +281,10 @@ end
 readers[CMP_TYPE_FIXSTR] = function(ctx, obj)
    local size = obj.as.str_size
    local buf = buffer.new(size)
-   if not ctx.ctx.read(ctx.ctx, buf:ptr(), size) then
+   if not ctx.ctx.read(ctx.ctx, buf.ptr, size) then
       error("ctx->read() failed")
    end
-   return ffi.string(buf:ptr(), size)
+   return ffi.string(buf.ptr, size)
 end
 readers[CMP_TYPE_STR8] = readers[CMP_TYPE_FIXSTR]
 readers[CMP_TYPE_STR16] = readers[CMP_TYPE_FIXSTR]
@@ -292,8 +292,8 @@ readers[CMP_TYPE_STR32] = readers[CMP_TYPE_FIXSTR]
 
 readers[CMP_TYPE_BIN8] = function(ctx, obj)
    local size = obj.as.bin_size
-   local buf = buffer.new_with_size(size)
-   if not ctx.ctx.read(ctx.ctx, buf:ptr(), size) then
+   local buf = buffer.new(size, size)
+   if not ctx.ctx.read(ctx.ctx, buf.ptr, size) then
       error("ctx->read() failed")
    end
    return buf
@@ -346,7 +346,7 @@ local function Context(buf)
    local self = {
       buf = buf,
       ctx = ffi.new("cmp_ctx_t"),
-      state = ffi.new("zz_cmp_buffer_state", buf.buf, 0),
+      state = ffi.new("zz_cmp_buffer_state", buf, 0),
    }
    ffi.C.cmp_init(self.ctx,
                   self.state,

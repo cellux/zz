@@ -151,7 +151,7 @@ end
 function M.send(s, data, len, flags)
    local buf = buffer.wrap(data, len or #data)
    flags = flags or 0
-   local bytes_sent = ffi.C.nn_send(s, buf:ptr(), #buf, flags)
+   local bytes_sent = ffi.C.nn_send(s, buf.ptr, #buf, flags)
    if bytes_sent == -1 then
       ef("nn_send() failed: %s", nn_error())
    end

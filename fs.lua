@@ -234,8 +234,8 @@ function File_mt:read(rsize)
       rsize = self:size() - self:pos()
    end
    local buf = buffer.new(rsize)
-   local bytes_read = self:read1(buf:ptr(), rsize)
-   buf:size(bytes_read)
+   local bytes_read = self:read1(buf.ptr, rsize)
+   buf.len = bytes_read
    return bytes_read > 0 and buf or nil
 end
 
@@ -258,7 +258,7 @@ end
 function File_mt:write(data)
    -- wrap data in a buffer (don't copy, don't take ownership)
    local buf = buffer.wrap(data)
-   return util.check_ok("write", #buf, self:write1(buf:ptr(), #buf))
+   return util.check_ok("write", #buf, self:write1(buf.ptr, #buf))
 end
 
 function File_mt:seek(offset, relative)

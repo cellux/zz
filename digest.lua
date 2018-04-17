@@ -10,7 +10,7 @@ function M_mt:__index(digest_type)
       if data then
          local buf = buffer.wrap(data)
          local md = ssl.Digest(digest_type)
-         md:update(buf:ptr(), #buf)
+         md:update(buf.ptr, #buf)
          return md:final()
       else
          return ssl.Digest(digest_type)

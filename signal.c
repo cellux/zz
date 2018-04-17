@@ -17,11 +17,14 @@ void *zz_signal_handler_thread(void *arg) {
   unsigned char evbuf[32];
   cmp_ctx_t cmp_ctx;
   zz_buffer_t cmp_buf;
-  zz_cmp_buffer_state cmp_buf_state;
+  zz_cmp_buffer_state cmp_buffer_state;
 
-  zz_buffer_init(&cmp_buf, evbuf, 0, 32);
-  cmp_buf_state.buffer = &cmp_buf;
-  cmp_init(&cmp_ctx, &cmp_buf_state, zz_cmp_buffer_reader, zz_cmp_buffer_writer);
+  cmp_buf.ptr = evbuf;
+  cmp_buf.cap = 32;
+  cmp_buf.len = 0;
+
+  cmp_buffer_state.buffer = &cmp_buf;
+  cmp_init(&cmp_ctx, &cmp_buffer_state, zz_cmp_buffer_reader, zz_cmp_buffer_writer);
 
   event_socket = nn_socket(AF_SP, NN_PUB);
   if (event_socket < 0) {
@@ -46,18 +49,18 @@ void *zz_signal_handler_thread(void *arg) {
       /* we use SIGALRM as the exit signal */
       break;
     }
-    zz_buffer_reset(&cmp_buf);
-    cmp_buf_state.pos = 0;
+    cmp_buf.len = 0;
+    cmp_buffer_state.pos = 0;
     cmp_write_array(&cmp_ctx, 2);
     cmp_write_str(&cmp_ctx, "signal", 6);
     cmp_write_array(&cmp_ctx, 2);
     cmp_write_sint(&cmp_ctx, signum);
     cmp_write_sint(&cmp_ctx, siginfo.si_pid);
     int bytes_sent = nn_send(event_socket,
-                             cmp_buf.data,
-                             cmp_buf.size,
+                             cmp_buf.ptr,
+                             cmp_buf.len,
                              0);
-    if (bytes_sent != cmp_buf.size) {
+    if (bytes_sent != cmp_buf.len) {
       fprintf(stderr, "signal: nn_send() failed when sending signal event!\n");
     }
   }

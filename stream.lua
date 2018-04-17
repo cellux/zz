@@ -37,7 +37,7 @@ function BaseStream:read(n)
          local ptr, block_size = mm.get_block(READ_BLOCK_SIZE)
          local nbytes = self:read1(ptr, block_size)
          buf = buffer.copy(ptr, nbytes)
-         buf:size(nbytes)
+         buf.len = nbytes
          mm.ret_block(ptr, block_size)
       end
    elseif n > 0 then
@@ -56,9 +56,9 @@ function BaseStream:read(n)
                bytes_left = 0
             end
          else
-            local dst = buf:ptr() + n - bytes_left
+            local dst = buf.ptr + n - bytes_left
             local nbytes = self:read1(dst, bytes_left)
-            buf:size(#buf + nbytes)
+            buf.len = #buf + nbytes
             bytes_left = bytes_left - nbytes
          end
       end
@@ -96,11 +96,11 @@ function BaseStream:read_until(marker)
    while not self:eof() do
       local chunk = self:read()
       buf:append(chunk) -- buffer automatically grows as needed
-      local search_ptr = buf:ptr() + start_search_at
+      local search_ptr = buf.ptr + start_search_at
       local search_len = #buf - start_search_at
       local p = ffi.cast("uint8_t*", ffi.C.memmem(search_ptr, search_len, marker, #marker))
       if p ~= nil then
-         local marker_offset = p - buf:ptr()
+         local marker_offset = p - buf.ptr
          local next_offset = marker_offset + #marker
          if next_offset < #buf then
             assert(self.read_buffer==nil)
@@ -122,7 +122,7 @@ function BaseStream:write(data)
    local size
    if buffer.is_buffer(data) then
       size = #data
-      data = data:ptr()
+      data = data.ptr
    end
    size = size or #data
    local nbytes = self:write1(ffi.cast("void*", data), size)
@@ -158,11 +158,11 @@ function MemoryStream:read1(ptr, size)
       local buf = self.buffers[1]
       local bufsize = #buf
       if bufsize > bytes_left then
-         ffi.copy(dst, buf:ptr(), bytes_left)
+         ffi.copy(dst, buf.ptr, bytes_left)
          self.buffers[1] = buffer.slice(buf, bytes_left)
          bytes_left = 0
       else
-         ffi.copy(dst, buf:ptr(), bufsize)
+         ffi.copy(dst, buf.ptr, bufsize)
          dst = dst + bufsize
          bytes_left = bytes_left - bufsize
          table.remove(self.buffers, 1)

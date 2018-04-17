@@ -22,6 +22,7 @@ typedef long int __blkcnt_t;
 typedef __off_t off_t; /* TODO: this is not correct */
 
 void *malloc (size_t size);
+void *calloc (size_t count, size_t eltsize);
 void free (void *ptr);
 
 enum {
