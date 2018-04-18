@@ -122,7 +122,7 @@ function TestSuite:run(tc)
       if remaining == 0 then
          io.stderr:write("\n")
          local function report_failure(t)
-            io.stderr:write(sf("%s FAILED:\n%s\n", t.name, t.err))
+            io.stderr:write(sf("\n%s\n\n%s\n", t.name, t.err))
          end
          self:walk(report_failure, function(t) return not t.ok end)
       end
