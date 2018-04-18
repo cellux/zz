@@ -48,24 +48,12 @@ testing("socket read/write using streams", function()
    assert(s1 ~= nil)
    assert(s2 ~= nil)
    local f = fs.open("testdata/arborescence.jpg")
-   local s_f = stream(f)
-   local writer = sched(function()
-      local s = stream(s1)
-      while not s_f:eof() do
-         s:write(s_f:read())
-      end
-      s1:close() -- otherwise the other side gets stuck in poll
-   end)
    local buf = buffer.new()
-   local reader = sched(function()
-      local s = stream(s2)
-      while not s:eof() do
-         buf:append(s:read())
-      end
-      s2:close()
-   end)
-   sched.join { reader, writer }
-   f:close()
+   sched.join {
+      stream.pipe(f, s1),
+      stream.pipe(s2, buf),
+   }
+   -- stream.pipe() closes both streams
    assert.equals(util.hexstr(digest.md5(buf)), '58823f6d5e1d154d37d9aa2dbaf27371')
 end)
 
@@ -105,7 +93,7 @@ testing:nosched("IPC using socketpair with line-oriented protocol", function()
       assert.equals(s:readln(), "quit")
       -- check that plain read() still works
       assert.equals(s:read(10), "extra-data")
-      sc:close()
+      s:close()
       process.exit()
    else
       -- parent
@@ -117,7 +105,7 @@ testing:nosched("IPC using socketpair with line-oriented protocol", function()
       assert.equals(s:readln(), "world")
       s:write("extra-data")
       process.waitpid(pid)
-      sp:close()
+      s:close()
    end
 end)
 
@@ -148,7 +136,7 @@ testing:nosched("listen, accept, connect (with local sockets)", function()
          local cs = stream(client)
          cs:writeln(msg)
          assert.equals(cs:readln(), msg)
-         client:close()
+         cs:close()
       end
       send("hello, world!")
       send("quit")
@@ -165,7 +153,7 @@ testing:nosched("listen, accept, connect (with local sockets)", function()
       local cs = stream(client)
       local msg = cs:readln()
       cs:writeln(msg)
-      client:close()
+      cs:close()
       if msg == "quit" then
          break
       end
@@ -196,7 +184,7 @@ testing:nosched("listen, accept, connect (with TCP sockets), getsockname, getpee
          cs:writeln(client_addr.port)
          cs:writeln(msg)
          assert.equals(cs:readln(), msg)
-         client:close()
+         cs:close()
       end
       send("hello, world!")
       send("quit")
@@ -218,7 +206,7 @@ testing:nosched("listen, accept, connect (with TCP sockets), getsockname, getpee
       assert.equals(peer_port, peer_addr.port)
       local msg = cs:readln()
       cs:writeln(msg)
-      client:close()
+      cs:close()
       if msg == "quit" then
          break
       end
@@ -325,7 +313,7 @@ testing("tcp server", function(t)
             local chunk = assert(loadstring("return "..expr))
             local value = tostring(chunk())
             cs:writeln(value)
-            client:close()
+            cs:close()
          end)
       end
       socket:close()
@@ -341,7 +329,7 @@ testing("tcp server", function(t)
       local cs = stream(client)
       cs:writeln(expr)
       local response = cs:readln()
-      client:close()
+      cs:close()
       responses[expr] = response
    end
    
