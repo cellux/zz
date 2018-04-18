@@ -87,6 +87,27 @@ function Buffer_mt:clear()
    ffi.fill(self.ptr, tonumber(self.len), 0)
 end
 
+function Buffer_mt:stream_impl(stream)
+   local buf = self
+   local read_offset = 0
+   function stream:close()
+   end
+   function stream:eof()
+      return read_offset == #buf
+   end
+   function stream:read1(ptr, size)
+      local nbytes = math.min(#buf - read_offset, size)
+      ffi.copy(ptr, buf.ptr + offset, nbytes)
+      offset = offset + nbytes
+      return nbytes
+   end
+   function stream:write1(ptr, size)
+      buf:append(ptr, size)
+      return size
+   end
+   return stream
+end
+
 function Buffer_mt:free()
    if self.ptr ~= nil and tonumber(self.cap) > 0 then
       ffi.C.free(self.ptr)
