@@ -22,7 +22,7 @@ local is_buffer
 local Buffer_mt = {}
 
 function Buffer_mt:__len()
-   return self.len
+   return tonumber(self.len)
 end
 
 function Buffer_mt:str(index, length)
@@ -80,11 +80,11 @@ function Buffer_mt.__eq(buf1, buf2)
 end
 
 function Buffer_mt:fill(c)
-   ffi.fill(self.ptr, self.len, c)
+   ffi.fill(self.ptr, tonumber(self.len), c)
 end
 
 function Buffer_mt:clear()
-   ffi.fill(self.ptr, self.len, 0)
+   ffi.fill(self.ptr, tonumber(self.len), 0)
 end
 
 function Buffer_mt:free()
@@ -128,8 +128,7 @@ function M.slice(data, offset, size)
    if is_buffer(data) then
       data = data.ptr
    end
-   data = ffi.cast("uint8_t*", data) + offset
-   return M.copy(ffi.cast("void*", data), size)
+   return M.copy(ffi.cast("uint8_t*", data) + offset, size)
 end
 
 function M.wrap(data, size)
@@ -137,7 +136,7 @@ function M.wrap(data, size)
    if is_buffer(data) then
       data = data.ptr
    end
-   return Buffer(ffi.cast("void*", data), 0, size)
+   return Buffer(ffi.cast("uint8_t*", data), 0, size)
 end
 
 return M
