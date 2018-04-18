@@ -29,7 +29,7 @@ function BaseStream:read(n)
    local READ_BLOCK_SIZE = M.READ_BLOCK_SIZE
    local buf
    if not n then
-      -- read any amount of bytes
+      -- read an arbitrary amount of bytes
       if self.read_buffer then
          buf = self.read_buffer
          self.read_buffer = nil
@@ -37,7 +37,6 @@ function BaseStream:read(n)
          local ptr, block_size = mm.get_block(READ_BLOCK_SIZE)
          local nbytes = self:read1(ptr, block_size)
          buf = buffer.copy(ptr, nbytes)
-         buf.len = nbytes
          mm.ret_block(ptr, block_size)
       end
    elseif n > 0 then
@@ -52,13 +51,15 @@ function BaseStream:read(n)
                self.read_buffer = nil
             else
                buf:append(self.read_buffer, bytes_left)
+               -- buffer.slice() makes a copy of read_buffer[bytes_left:]
+               -- the previous read_buffer will be disposed by the GC
                self.read_buffer = buffer.slice(self.read_buffer, bytes_left)
                bytes_left = 0
             end
          else
             local dst = buf.ptr + n - bytes_left
             local nbytes = self:read1(dst, bytes_left)
-            buf.len = #buf + nbytes
+            buf.len = buf.len + nbytes
             bytes_left = bytes_left - nbytes
          end
       end
@@ -97,7 +98,7 @@ function BaseStream:read_until(marker)
       local chunk = self:read()
       buf:append(chunk) -- buffer automatically grows as needed
       local search_ptr = buf.ptr + start_search_at
-      local search_len = #buf - start_search_at
+      local search_len = buf.len - start_search_at
       local p = ffi.cast("uint8_t*", ffi.C.memmem(search_ptr, search_len, marker, #marker))
       if p ~= nil then
          local marker_offset = p - buf.ptr
