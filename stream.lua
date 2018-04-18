@@ -1,4 +1,5 @@
 local ffi = require('ffi')
+local sched = require('sched')
 local util = require('util')
 local buffer = require('buffer')
 local mm = require('mm')
@@ -172,15 +173,40 @@ function MemoryStream:read1(ptr, size)
    return size - bytes_left
 end
 
+local function is_stream(x)
+   return type(x) == "table" and x.is_stream
+end
+
 local function make_stream(x)
+   if is_stream(x) then
+      return x
+   end
+   local s
    if not x then
-      return MemoryStream()
+      s = MemoryStream()
    elseif (type(x)=="table" or type(x)=="cdata") and type(x.stream_impl)=="function" then
-      local s = BaseStream()
+      s = BaseStream()
       return x:stream_impl(s)
    else
       ef("cannot create stream of %s", x)
    end
+   s.is_stream = true
+   return s
+end
+
+function M.pipe(s1, s2)
+   s1 = make_stream(s1)
+   s2 = make_stream(s2)
+   return sched(function()
+      local ptr, block_size = mm.get_block(M.READ_BLOCK_SIZE)
+      while not s1:eof() do
+         local nbytes = s1:read1(ptr, block_size)
+         s2:write1(ptr, nbytes)
+      end
+      s1:close()
+      s2:close()
+      mm.ret_block(ptr, block_size)
+   end)
 end
 
 local M_mt = {}
