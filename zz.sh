@@ -30,6 +30,7 @@ PACKAGE_MODULES=(
   sha1
   signal
   stream
+  testing
   time
   trigger
   uri
