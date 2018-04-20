@@ -298,9 +298,9 @@ function Socket_mt:bind(sockaddr)
    return util.check_errno("bind", ffi.C.bind(self.fd, ffi.cast("struct sockaddr *", sockaddr.addr), sockaddr.addr_size))
 end
 
-function Socket_mt:listen(n)
-   n = n or 64
-   return util.check_errno("listen", ffi.C.listen(self.fd, n))
+function Socket_mt:listen(queue_len)
+   queue_len = queue_len or 128
+   return util.check_errno("listen", ffi.C.listen(self.fd, queue_len))
 end
 
 function Socket_mt:getsockname()
@@ -309,6 +309,9 @@ function Socket_mt:getsockname()
    end
    local sock_addr = sockaddr(self.domain)
    local sock_addr_size = ffi.new("socklen_t[1]", ffi.sizeof(sock_addr.addr))
+   -- "Note that LENGTH-PTR (here sock_addr_size) is a pointer; you
+   -- should initialize it to be the allocation size of ADDR, and on
+   -- return it contains the actual size of the address data."
    util.check_errno("getsockname", ffi.C.getsockname(self.fd, ffi.cast("struct sockaddr *", sock_addr.addr), sock_addr_size))
    sock_addr.addr_size = sock_addr_size[0]
    return sock_addr
@@ -336,8 +339,8 @@ end
 function Socket_mt:connect(sockaddr)
    local rv = ffi.C.connect(self.fd, ffi.cast("struct sockaddr *", sockaddr.addr), sockaddr.addr_size)
    if rv == -1 then
-      local errnum = errno.errno()
-      if errnum == ffi.C.EINPROGRESS and sched.ticking() then
+      local e = errno.errno()
+      if e == ffi.C.EINPROGRESS and sched.ticking() then
          sched.poll(self.fd, "w")
          local optval = ffi.new("int[1]")
          local optlen = ffi.new("socklen_t[1]", ffi.sizeof("int"))
@@ -352,7 +355,7 @@ function Socket_mt:connect(sockaddr)
          end
          return 0
       else
-         ef("connect() failed: %s", errno.strerror(errnum))
+         ef("connect() failed: %s", errno.strerror(e))
       end
    else
       return 0
@@ -448,7 +451,7 @@ function Socket_mt:sendto(data, addr)
    if sched.ticking() then
       sched.poll(self.fd, "w")
    end
-   local rv = util.check_errno("sendto", ffi.C.sendto(self.fd, buf.ptr, #data, 0, ffi.cast("const struct sockaddr *", addr.addr), addr.addr_size))
+   local rv = util.check_errno("sendto", ffi.C.sendto(self.fd, buf.ptr, #buf, 0, ffi.cast("const struct sockaddr *", addr.addr), addr.addr_size))
    return rv
 end
 
