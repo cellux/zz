@@ -1,6 +1,7 @@
 local ffi = require('ffi')
 local util = require('util')
 local net = require('net')
+local stream = require('stream')
 
 ffi.cdef [[
 
@@ -59,6 +60,8 @@ end
 function M.fork(child_fn)
    if child_fn then
       local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM, 0)
+      sp = stream(sp)
+      sc = stream(sc)
       local pid = util.check_errno("fork", ffi.C.fork())
       if pid == 0 then
          sp:close()

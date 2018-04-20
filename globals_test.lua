@@ -3,20 +3,32 @@ local assert = require('assert')
 local fs = require('fs') -- for dup2
 local process = require('process')
 local ffi = require('ffi')
+local net = require('net')
 local sched = require('sched')
+local stream = require('stream')
 
 testing("sf", function()
    assert.equals(sf("Hello, %s", "world"), "Hello, world")
 end)
 
 testing:nosched("pf", function()
-   local pid, sp = process.fork(function(sc)
+   local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM, 0)
+   local pid = process.fork()
+   if pid == 0 then
+      -- child
+      sp:close()
       ffi.C.dup2(sc.fd, 1)
       pf("Hello, %s\n", "world")
-   end)
-   assert.equals(sp:read(13), "Hello, world\n")
-   sp:close()
-   process.waitpid(pid)
+      sc:close()
+      process.exit()
+   else
+      -- parent
+      sc:close()
+      sp = stream(sp)
+      assert.equals(sp:read(13), "Hello, world\n")
+      sp:close()
+      process.waitpid(pid)
+   end
 end)
 
 testing:nosched("ef", function()
@@ -24,7 +36,7 @@ testing:nosched("ef", function()
    local status, err = pcall(function() ef("Hello, %s", "world") end)
    assert.equals(status, false)
    assert.type(err, "string")
-   assert.equals(err, sf("%s:24: Hello, world", test_path))
+   assert.equals(err, sf("%s:36: Hello, world", test_path))
 
    -- if we throw an error from a coroutine running inside the scheduler,
    -- we'd like to get a valid backtrace which correctly shows where the
@@ -41,9 +53,9 @@ testing:nosched("ef", function()
    --
    -- the second part contains the global (non-coroutine-specific)
    -- traceback appended by error()
-   local expected = test_path..[[:34: Hello, world
+   local expected = test_path..[[:46: Hello, world
 stack traceback:
-	]]..test_path..[[:34: in function 'throwit'
-	]]..test_path..[[:36: in function <]]..test_path..[[:36>]]
+	]]..test_path..[[:46: in function 'throwit'
+	]]..test_path..[[:48: in function <]]..test_path..[[:48>]]
    assert.equals(err:sub(1,#expected), expected)
 end)

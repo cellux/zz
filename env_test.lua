@@ -5,6 +5,7 @@ local process = require('process')
 local ffi = require('ffi')
 local fs = require('fs') -- for dup2
 local net = require('net')
+local stream = require('stream')
 
 testing("env", function()
    assert.type(env.PATH, "string")
@@ -25,6 +26,7 @@ testing("env", function()
       -- parent
       sc:close()
       assert.equals(env.ZZ_ENV_TEST, "5")
+      sp = stream(sp)
       assert.equals(sp:read(), "in the child, ZZ_ENV_TEST=6\n")
       sp:close()
       process.waitpid(pid)

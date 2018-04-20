@@ -35,6 +35,8 @@ testing("socketpair", function()
    local s1, s2 = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM)
    assert(s1 ~= nil)
    assert(s2 ~= nil)
+   s1 = stream(s1)
+   s2 = stream(s2)
    s1:write("hello")
    assert.equals(s2:read(5), "hello")
    s2:write("world")
@@ -58,55 +60,39 @@ testing("socket read/write using streams", function()
 end)
 
 testing:nosched("IPC using socketpair", function()
-   local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM)
-   local pid = process.fork()
-   if pid == 0 then
+   local pid, sp = process.fork(function(sc)
       -- child
-      sp:close()
       assert.equals(sc:read(5), "hello")
       sc:write("world")
       assert.equals(sc:read(), "quit")
-      sc:close()
-      process.exit(0)
-   else
-      -- parent
-      sc:close()
-      sp:write("hello")
-      assert.equals(sp:read(5), "world")
-      sp:write("quit")
-      sp:close()
-      -- closing sp causes an EOF condition on sc in the child
-      -- at this point, sc:read() returns and the child exits
-      process.waitpid(pid)
-   end
+   end)
+   -- parent
+   sp:write("hello")
+   assert.equals(sp:read(5), "world")
+   sp:write("quit")
+   sp:close()
+   -- closing sp causes an EOF condition on sc in the child
+   -- at this point, sc:read() returns and the child exits
+   process.waitpid(pid)
 end)
 
 testing:nosched("IPC using socketpair with line-oriented protocol", function()
-   local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM)
-   local pid = process.fork()
-   if pid == 0 then
+   local pid, sp = process.fork(function(sc)
       -- child
-      sp:close()
-      local s = stream(sc)
-      assert.equals(s:readln(), "hello")
-      s:writeln("world")
-      assert.equals(s:readln(), "quit")
+      assert.equals(sc:readln(), "hello")
+      sc:writeln("world")
+      assert.equals(sc:readln(), "quit")
       -- check that plain read() still works
-      assert.equals(s:read(10), "extra-data")
-      s:close()
-      process.exit()
-   else
-      -- parent
-      sc:close()
-      local s = stream(sp)
-      s:writeln("hello")
-      -- sending quit immediately after hello shouldn't confuse the child
-      s:writeln("quit")
-      assert.equals(s:readln(), "world")
-      s:write("extra-data")
-      process.waitpid(pid)
-      s:close()
-   end
+      assert.equals(sc:read(10), "extra-data")
+   end)
+   -- parent
+   sp:writeln("hello")
+   -- sending quit immediately after hello shouldn't confuse the child
+   sp:writeln("quit")
+   assert.equals(sp:readln(), "world")
+   sp:write("extra-data")
+   process.waitpid(pid)
+   sp:close()
 end)
 
 testing("sockaddr", function()
@@ -142,7 +128,7 @@ testing:nosched("listen, accept, connect (with local sockets)", function()
       send("quit")
       -- process.fork() will close sc for us
    end)
-   
+
    local server = net.socket(net.PF_LOCAL, net.SOCK_STREAM)
    server.SO_REUSEADDR = true
    server:bind(socket_addr)
@@ -161,7 +147,7 @@ testing:nosched("listen, accept, connect (with local sockets)", function()
    server:close()
    sp:close()
    process.waitpid(pid)
-   
+
    if fs.exists(socket_path) then
       fs.unlink(socket_path)
    end
@@ -232,7 +218,7 @@ testing:nosched("UDP sockets", function(t)
       function send(msg)
          local client = net.socket(net.PF_INET, net.SOCK_DGRAM)
          client:sendto(msg, server_addr)
-         local reply, peer_addr = client:recvfrom()
+         local reply, peer_addr = client:recv()
          assert.equals(reply, msg)
          assert.equals(peer_addr.address, server_host)
          assert.equals(peer_addr.port, server_port)
@@ -249,7 +235,7 @@ testing:nosched("UDP sockets", function(t)
    sp:write("server-ready\n")
    while true do
       -- local client = server:accept() -- not supported
-      local msg, peer_addr = server:recvfrom()
+      local msg, peer_addr = server:recv()
       assert.equals(peer_addr.address, server_host)
       assert(type(peer_addr.port)=="number")
       server:sendto(msg, peer_addr)
@@ -402,9 +388,10 @@ testing:nosched("TCPListener, UDPListener", function(t)
       local function client()
          local client = net.socket(net.PF_INET, socket_type)
          client:connect(server_addr)
-         client:write("ping")
-         assert.equals(client:read(4), "pong")
-         client:close()
+         local cs = stream(client)
+         cs:write("ping")
+         assert.equals(cs:read(4), "pong")
+         cs:close()
          nclients = nclients - 1
          if nclients == 0 then
             sched.quit()

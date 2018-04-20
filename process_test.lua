@@ -4,6 +4,7 @@ local ffi = require('ffi')
 local assert = require('assert')
 local fs = require('fs') -- for dup2
 local net = require('net')
+local stream = require('stream')
 
 testing:nosched("getpid, fork, waitpid", function()
    local ppid = process.getpid()
@@ -14,29 +15,31 @@ testing:nosched("getpid, fork, waitpid", function()
    if pid == 0 then
       -- child
       sp:close()
+      sc = stream(sc)
+      assert(process.getpid() ~= ppid)
       sc:write(sf("%u\n", process.getpid()))
       sc:close()
-      assert(process.getpid() ~= ppid)
       process.exit()
    else
       -- parent
       sc:close()
+      sp = stream(sp)
       assert(process.getpid() == ppid)
-      local child_pid = tonumber(sp:read())
+      local child_pid = tonumber(sp:readln())
       sp:close()
       assert.equals(child_pid, pid)
       assert.equals(process.waitpid(pid), pid)
    end
+end)
 
-   -- the same, using some sugar
-
+testing:nosched("process.fork(child_fn)", function()
+   local ppid = process.getpid()
    local pid, sp = process.fork(function(sc)
-      sc:write(sf("%u\n", process.getpid()))
-      sc:close()
       assert(process.getpid() ~= ppid)
+      sc:write(sf("%u\n", process.getpid()))
    end)
    assert(process.getpid() == ppid)
-   local child_pid = tonumber(sp:read())
+   local child_pid = tonumber(sp:readln())
    sp:close()
    assert.equals(child_pid, pid)
    assert.equals(process.waitpid(pid), pid)
@@ -61,6 +64,7 @@ testing:nosched("system", function()
       process.exit()
    else
       sc:close()
+      sp = stream(sp)
       -- read(0) means read until EOF
       assert.equals(sp:read(0), "HELLO\nWORLD\n".."HELLO\nWORLD\n")
       sp:close()
@@ -79,6 +83,7 @@ testing:nosched("execvp", function()
       -- doesn't return
    else
       sc:close()
+      sp = stream(sp)
       assert.equals(sp:read(), "hello world!\n")
       sp:close()
       assert.equals(process.waitpid(pid), pid)

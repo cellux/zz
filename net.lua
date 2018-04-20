@@ -5,6 +5,7 @@ local epoll = require('epoll')
 local sched = require('sched')
 local errno = require('errno')
 local buffer = require('buffer')
+local stream = require('stream')
 local trigger = require('trigger')
 local mm = require('mm')
 
@@ -369,81 +370,11 @@ function Socket_mt:read1(ptr, size)
    return util.check_errno("read", ffi.C.read(self.fd, ptr, size))
 end
 
-function Socket_mt:read(count)
-   -- count==nil: read any number of bytes (including none)
-   -- count==0: read until read() returns 0
-   -- count==N: read exactly N bytes (do not return until we got it)
-   local data = ""
-   -- set remaining only if we have an exact count of bytes to read
-   local remaining = nil
-   if count then
-      assert(type(count)=="number" and count >= 0)
-      if count > 0 then
-         remaining = count
-      end
-   end
-   local read_any = (count == nil)
-   local read_until_eof = (count == 0)
-   if #self.readbuf > 0 then
-      if remaining then
-         if #self.readbuf >= remaining then
-            data = string.sub(self.readbuf, 1, remaining)
-            self.readbuf = string.sub(self.readbuf, remaining+1)
-            remaining = 0
-            return data
-         else
-            data = self.readbuf
-            self.readbuf = ""
-            remaining = remaining - #data
-         end
-      else
-         data = self.readbuf
-         self.readbuf = ""
-      end
-   end
-   local blocksize = 4096
-   local buf = ffi.new("uint8_t[?]", blocksize)
-   while true do
-      if remaining then
-         if remaining == 0 then
-            break
-         elseif remaining < blocksize then
-            blocksize = remaining
-         end
-      end
-      if sched.ticking() then
-         sched.poll(self.fd, "r")
-      end
-      local nbytes = util.check_errno("read", ffi.C.read(self.fd, buf, blocksize))
-      if nbytes > 0 then
-         data = data .. ffi.string(buf, nbytes)
-         if remaining then
-            remaining = remaining - nbytes
-         end
-      elseif read_until_eof then
-         break
-      end
-      if read_any then
-         break
-      end
-   end
-   return data
-end
-
 function Socket_mt:write1(ptr, size)
    if sched.ticking() then
       sched.poll(self.fd, "w")
    end
    return util.check_errno("write", ffi.C.write(self.fd, ptr, size))
-end
-
-function Socket_mt:write(data)
-   local buf = buffer.wrap(data)
-   if sched.ticking() then
-      sched.poll(self.fd, "w")
-   end
-   local nbytes = util.check_errno("write", ffi.C.write(self.fd, buf.ptr, #data))
-   return nbytes
 end
 
 function Socket_mt:sendto(data, addr)
@@ -611,7 +542,7 @@ function TCPListener:start()
    qpoll(socket.fd, function()
       local client = socket:accept()
       sched(function()
-         self.server(client)
+         self.server(stream(client))
          client:close()
       end)
    end)
@@ -639,26 +570,26 @@ function UDPListener:start()
    sched.poller_add(socket.fd, "rw")
    local clients = {}
    qpoll(socket.fd, function()
-      local data, peer_addr = socket:recvfrom()
+      local data, peer_addr = socket:recv()
       local client_id = tostring(peer_addr)
       repeat
          if not clients[client_id] then
             local ss, sc = M.socketpair(ffi.C.PF_LOCAL, ffi.C.SOCK_STREAM)
             local client = {
-               ss = ss,
-               sc = sc,
+               ss = stream(ss),
+               sc = stream(sc),
                mtime = sched.now,
                active = true,
             }
             sched.poller_add(ss.fd, "rw")
             sched(function()
-               self.server(sc)
+               self.server(client.sc)
                client.active = false
                sc:close()
             end)
             sched(function()
                while client.active do
-                  local data = ss:read()
+                  local data = client.ss:read()
                   socket:sendto(data, peer_addr)
                end
                sched.poller_del(ss.fd)
