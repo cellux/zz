@@ -550,24 +550,27 @@ function M.socketpair(domain, type, protocol)
    return Socket(fds[0], domain), Socket(fds[1], domain)
 end
 
-local function qpoll(fd, cb) -- "quittable" poll
+local function qpoll(fd, cb, quit_event) -- "quittable" poll
    local exit_trigger = trigger()
    local poller = epoll.create(1)
    poller:add(exit_trigger.fd, "r", exit_trigger.fd)
    poller:add(fd, "r", fd)
-   sched.on('quit', function()
+   quit_event = quit_event or 'quit'
+   sched.on(quit_event, function()
       exit_trigger:fire()
       -- exit_trigger will be polled in the next cycle of the event loop
       -- without this sched.yield() here, the qpoll loop wouldn't exit
       sched.yield()
    end)
-   while sched.running() do
+   local running = true
+   while running do
       sched.poll(poller:fd(), "r")
       poller:wait(0, function(events, data)
          if data == fd then
             cb()
          elseif data == exit_trigger.fd then
             exit_trigger:read()
+            running = false
          else
             error("invalid fd in epoll event")
          end
