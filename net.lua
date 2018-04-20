@@ -218,9 +218,14 @@ function sockaddr_mt:__index(k)
          return rv
       elseif self.af == ffi.C.AF_INET then
          local bufsize = 128
-         local buf = ffi.new("char[?]", bufsize)
-         local rv = util.check_bad("inet_ntop", nil, ffi.C.inet_ntop(self.af, ffi.cast("const void *", self.addr.sin_addr), buf, bufsize))
-         return ffi.string(rv)
+         local buf, block_size = mm.get_block(bufsize)
+         util.check_bad("inet_ntop", nil,
+                        ffi.C.inet_ntop(self.af,
+                                        ffi.cast("const void *", self.addr.sin_addr),
+                                        buf, bufsize))
+         local rv = ffi.string(buf)
+         mm.ret_block(buf, block_size)
+         return rv
       else
          error("Unsupported address family")
       end
