@@ -76,9 +76,10 @@ function BaseStream:read(n)
       local ptr, block_size = mm.get_block(READ_BLOCK_SIZE)
       while not self:eof() do
          local nbytes = self:read1(ptr, block_size)
-         assert(nbytes > 0)
-         table.insert(buffers, buffer.copy(ptr, nbytes))
-         nbytes_total = nbytes_total + nbytes
+         if nbytes > 0 then
+            table.insert(buffers, buffer.copy(ptr, nbytes))
+            nbytes_total = nbytes_total + nbytes
+         end
       end
       mm.ret_block(ptr, block_size)
       buf = buffer.new(nbytes_total)
