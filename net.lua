@@ -6,6 +6,7 @@ local sched = require('sched')
 local errno = require('errno')
 local buffer = require('buffer')
 local trigger = require('trigger')
+local mm = require('mm')
 
 ffi.cdef [[
 
@@ -446,22 +447,24 @@ function Socket_mt:sendto(data, addr)
    return rv
 end
 
-function Socket_mt:recvfrom(buf)
-   local bufsize
-   if not buf then
-      bufsize = 4096
-      buf = ffi.new("uint8_t[?]", bufsize)
-   else
-      bufsize = #buf
-   end
+function Socket_mt:recvfrom(ptr, size)
    local peer_addr = sockaddr(self.domain)
    local address_len = ffi.new("socklen_t[1]", ffi.sizeof(peer_addr.addr))
    if sched.ticking() then
       sched.poll(self.fd, "r")
    end
-   local nbytes = util.check_errno("recvfrom", ffi.C.recvfrom(self.fd, buf, bufsize, 0, ffi.cast("struct sockaddr *", peer_addr.addr), address_len))
+   local nbytes = util.check_errno("recvfrom", ffi.C.recvfrom(self.fd, ptr, size, 0, ffi.cast("struct sockaddr *", peer_addr.addr), address_len))
    peer_addr.addr_size = address_len[0]
-   return ffi.string(buf, nbytes), peer_addr
+   return nbytes, peer_addr
+end
+
+function Socket_mt:recv(size)
+   size = size or 4096
+   local ptr, block_size = mm.get_block(size)
+   local nbytes, peer_addr = self:recvfrom(ptr, size)
+   local buf = buffer.copy(ptr, nbytes)
+   mm.ret_block(ptr, block_size)
+   return buf, peer_addr
 end
 
 function Socket_mt:shutdown(how)
