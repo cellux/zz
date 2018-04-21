@@ -1086,39 +1086,39 @@ return P
    end
 end
 
-local function checkout(package_name, opts)
+local git = setmetatable({}, {
+   __index = function(self, command)
+      return function(...)
+         local status = system { "git", command, ... }
+         if status ~= 0 then
+            die("git %s failed", command)
+         end
+      end
+   end
+})
+
+local function checkout(package_name, opts, seen)
    opts = opts or {}
+   seen = seen or {}
+   if seen[package_name] then
+      return
+   end
    local pkgname, pkgurl = parse_package_name(package_name)
    local srcdir = sf("%s/src/%s", ZZPATH, pkgname)
    if not fs.exists(srcdir) then
-      log("mkpath: %s", srcdir)
-      fs.mkpath(srcdir)
+      git.clone(pkgurl, srcdir)
+   elseif opts.update then
       with_cwd(srcdir, function()
-         local status = system { "git", "clone", pkgurl, "." }
-         if status ~= 0 then
-            die("git clone failed")
-         end
-      end)
-   else
-      with_cwd(srcdir, function()
-         local status = system { "git", "fetch" }
-         if status ~= 0 then
-            die("git fetch failed")
-         end
+         git.fetch()
       end)
    end
    with_cwd(srcdir, function()
-      local status = process.system { "git", "checkout", "master" }
-      if status ~= 0 then
-         die("git checkout failed")
-      end
+      git.checkout("master")
       if opts.update then
-         local status = system { "git", "pull" }
-         if status ~= 0 then
-            die("git pull failed")
-         end
+         git.pull()
       end
    end)
+   seen[package_name] = true
    if opts.recursive then
       -- checkout dependencies
       local pd = PackageDescriptor(pkgname)
@@ -1126,7 +1126,7 @@ local function checkout(package_name, opts)
          checkout(package_name, {
             update = false,
             recursive = true
-         })
+         }, seen)
       end
    end
 end
