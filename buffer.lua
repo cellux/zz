@@ -126,11 +126,17 @@ is_buffer = function(x)
 end
 M.is_buffer = is_buffer
 
+local nil_buffer = Buffer(nil, 0, 0)
+
 function M.new(cap, len)
    cap = cap or ZZ_BUFFER_DEFAULT_CAPACITY
    len = len or 0
-   local ptr = ffi.C.calloc(cap, 1)
-   return Buffer(ptr, cap, len)
+   if cap == 0 then
+      return nil_buffer
+   else
+      local ptr = ffi.C.calloc(cap, 1)
+      return Buffer(ptr, cap, len)
+   end
 end
 
 function M.copy(data, size)

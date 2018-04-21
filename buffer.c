@@ -41,5 +41,5 @@ size_t zz_buffer_append(zz_buffer_t *self, const void *data, size_t size) {
 
 int zz_buffer_equals(zz_buffer_t *self, zz_buffer_t *other) {
   return (self->len == other->len) &&
-    (0 == memcmp(self->ptr, other->ptr, self->len));
+    (self->len == 0 || (0 == memcmp(self->ptr, other->ptr, self->len)));
 }
