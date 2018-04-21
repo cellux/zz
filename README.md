@@ -44,9 +44,10 @@ git clone https://github.com/cellux/zz .
 # compile
 make
 make test
+make install
 ```
 
-If compilation succeeds, you shall find a `zz` executable under `$ZZPATH/bin`. It's advisable to place this directory onto PATH as all ZZ executables intended for global consumption are installed there.
+If installation succeeds, you shall find a `zz` executable under `$ZZPATH/bin`. It's advisable to place this directory onto PATH as all ZZ executables intended for global consumption are installed there.
 
 TODO: Describe how to create programs/packages on top of ZZ.
 
