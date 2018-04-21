@@ -25,13 +25,15 @@ end)
 
 testing("read", function()
    -- read whole file at once
-   local f = fs.open('testdata/hello.txt')
-   local contents = f:read()
+   local f = stream(fs.open('testdata/hello.txt'))
+   local contents = f:read(0)
+   assert(buffer.is_buffer(contents))
    assert(contents=="hello, world!\n")
    f:close()
 
    -- read whole file at once, using helper func
    local contents = fs.readfile('testdata/hello.txt')
+   assert(buffer.is_buffer(contents))
    assert(contents=="hello, world!\n")
 
    -- read a bigger file
@@ -39,22 +41,22 @@ testing("read", function()
    assert.equals(#contents, 81942)
 
    -- read some bytes
-   local f = fs.open('testdata/hello.txt')
+   local f = stream(fs.open('testdata/hello.txt'))
    local contents = f:read(5)
+   assert(buffer.is_buffer(contents))
    assert(contents=="hello")
    f:close()
 
-   -- if we want to read more bytes than the length of the file, we
-   -- don't get an error
-   local f = fs.open('testdata/hello.txt')
+   -- reading beyond the end is not an error
+   local f = stream(fs.open('testdata/hello.txt'))
    local contents = f:read(4096)
    assert(contents=="hello, world!\n")
-   -- further reads return nil
-   assert(f:read(4096)==nil)
+   -- further reads return an empty buffer
+   assert(f:read(4096)=="")
    f:close()
 end)
 
-testing("write", function()
+testing("writefile", function()
    fs.with_tmpdir(function(tmpdir)
       local tmp = fs.join(tmpdir, 'arborescence.jpg')
       fs.writefile(tmp, fs.readfile('testdata/arborescence.jpg'))
@@ -66,14 +68,14 @@ testing("seek", function()
    -- seek from start
    local f = fs.open('testdata/hello.txt')
    assert(f:seek(5)==5)
-   local contents = f:read()
+   local contents = stream(f):read()
    assert(contents==", world!\n")
    f:close()
 
    -- seek from end
    local f = fs.open('testdata/hello.txt')
    assert(f:seek(-7)==7)
-   local contents = f:read(5)
+   local contents = stream(f):read(5)
    assert(contents=="world")
    f:close()
 
@@ -81,7 +83,7 @@ testing("seek", function()
    local f = fs.open('testdata/hello.txt')
    assert(f:seek(5)==5)
    assert(f:seek(2, true)==7)
-   local contents = f:read(5)
+   local contents = stream(f):read(5)
    assert(contents=="world")
    f:close()
 end)
@@ -91,12 +93,12 @@ testing("mkstemp", function()
    assert(type(path)=="string")
    assert(fs.exists(path))
    assert(re.match("^/tmp/.+$", path))
-   f:write("stuff\n")
+   stream(f):write("stuff\n")
    f:close()
    -- temp file should be still there
    assert(fs.exists(path))
    local f = fs.open(path)
-   assert.equals(tostring(f:read()), "stuff\n")
+   assert.equals(stream(f):read(0), "stuff\n")
    f:close()
    fs.unlink(path)
    assert(not fs.exists(path))

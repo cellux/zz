@@ -9,6 +9,7 @@ local env = require('env')
 local errno = require('errno')
 local inspect = require('inspect')
 local util = require('util')
+local stream = require('stream')
 
 ffi.cdef [[
 
@@ -228,17 +229,6 @@ function File_mt:read1(ptr, size)
    return util.check_errno("read1", nbytes)
 end
 
-function File_mt:read(rsize)
-   if not rsize then
-      -- read the whole rest of the file
-      rsize = self:size() - self:pos()
-   end
-   local buf = buffer.new(rsize)
-   local bytes_read = self:read1(buf.ptr, rsize)
-   buf.len = bytes_read
-   return bytes_read > 0 and buf or nil
-end
-
 function File_mt:write1(ptr, size)
    local nbytes = 0
    if sched.ticking() then
@@ -253,12 +243,6 @@ function File_mt:write1(ptr, size)
       nbytes = ffi.C.write(self.fd, ptr, size)
    end
    return util.check_errno("write1", nbytes)
-end
-
-function File_mt:write(data)
-   -- wrap data in a buffer (don't copy, don't take ownership)
-   local buf = buffer.wrap(data)
-   return util.check_ok("write", #buf, self:write1(buf.ptr, #buf))
 end
 
 function File_mt:seek(offset, relative)
@@ -329,7 +313,7 @@ end
 
 function M.readfile(path, rsize)
    local f = M.open(path)
-   local contents = f:read(rsize)
+   local contents = stream(f):read(rsize or 0)
    f:close()
    return contents
 end
@@ -338,7 +322,7 @@ function M.writefile(path, contents)
    local f = M.open(path, bit.bor(ffi.C.O_CREAT,
                                   ffi.C.O_WRONLY,
                                   ffi.C.O_TRUNC))
-   f:write(contents)
+   stream(f):write(contents)
    f:close()
 end
 
