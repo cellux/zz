@@ -97,8 +97,8 @@ function Buffer_mt:stream_impl(stream)
    end
    function stream:read1(ptr, size)
       local nbytes = math.min(#buf - read_offset, size)
-      ffi.copy(ptr, buf.ptr + offset, nbytes)
-      offset = offset + nbytes
+      ffi.copy(ptr, buf.ptr + read_offset, nbytes)
+      read_offset = read_offset + nbytes
       return nbytes
    end
    function stream:write1(ptr, size)
