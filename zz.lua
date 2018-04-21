@@ -10,6 +10,7 @@ local util = require('util')
 local bcsave = require('jit.bcsave')
 local ffi = require('ffi')
 local adt = require('adt')
+local stream = require('stream')
 
 local reduce = util.reduce
 local extend = util.extend
@@ -773,9 +774,9 @@ function BuildContext:main_targets(name, bootstrap_code)
       basename = sf("%s.lua", name),
       depends = main_tpl_lua,
       build = function(self)
-         local f = fs.open(self.path, bit.bor(ffi.C.O_CREAT,
+         local f = stream(fs.open(self.path, bit.bor(ffi.C.O_CREAT,
                                               ffi.C.O_WRONLY,
-                                              ffi.C.O_TRUNC))
+                                              ffi.C.O_TRUNC)))
          f:write(ctx:gen_preamble())
          f:write(fs.readfile(main_tpl_lua.path))
          f:write(bootstrap_code)
