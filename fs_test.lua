@@ -12,19 +12,16 @@ local re = require('re')
 local mm = require('mm')
 local ffi = require('ffi')
 
-local tmp_index = 0
-
-local function with_tmpdir(cb)
-   tmp_index = tmp_index + 1
-   local tmpdir = sf("/tmp/fs_test.%d.%d", process.getpid(), tmp_index)
-   assert.equals(0, fs.mkdir(tmpdir))
-   assert(fs.is_dir(tmpdir))
-   local ok, err = pcall(cb, tmpdir)
-   fs.rmpath(tmpdir)
-   if not ok then
-      error(err, 2)
-   end
-end
+testing("with_tmpdir", function()
+   local tmpdir_save
+   fs.with_tmpdir(function(tmpdir)
+      assert(fs.is_dir(tmpdir))
+      -- cleanup shall remove subdirectories
+      fs.mkpath(fs.join(tmpdir, "a/b/c/d"))
+      tmpdir_save = tmpdir
+   end)
+   assert(not fs.exists(tmpdir_save))
+end)
 
 testing("read", function()
    -- read whole file at once
@@ -58,7 +55,7 @@ testing("read", function()
 end)
 
 testing("write", function()
-   with_tmpdir(function(tmpdir)
+   fs.with_tmpdir(function(tmpdir)
       local tmp = fs.join(tmpdir, 'arborescence.jpg')
       fs.writefile(tmp, fs.readfile('testdata/arborescence.jpg'))
       assert.equals(fs.readfile(tmp), fs.readfile('testdata/arborescence.jpg'))
@@ -351,7 +348,7 @@ testing("stream.read", function()
 end)
 
 testing("stream.write", function()
-   with_tmpdir(function(tmpdir)
+   fs.with_tmpdir(function(tmpdir)
       local sin = stream(fs.open("testdata/arborescence.jpg"))
       local fout_path = fs.join(tmpdir, "test_stream_write")
       local sout = stream(fs.open(fout_path, bit.bor(ffi.C.O_CREAT, ffi.C.O_RDWR)))
@@ -371,7 +368,7 @@ testing("symlink_readlink_realpath", function()
    assert(abs ~= rel)
    assert.equals(abs:sub(1,1), "/")
    assert.equals(fs.readfile(abs), fs.readfile(rel))
-   with_tmpdir(function(tmpdir)
+   fs.with_tmpdir(function(tmpdir)
       local tmp = fs.join(tmpdir, "arborescence.jpg")
       fs.symlink(abs, tmp)
       assert(fs.is_lnk(tmp))
@@ -408,7 +405,7 @@ testing("Path", function()
 end)
 
 testing("mkdir_rmdir", function()
-   with_tmpdir(function(tmpdir)
+   fs.with_tmpdir(function(tmpdir)
       local foo_path = fs.join(tmpdir, "foo")
       assert.equals(0, fs.mkdir(foo_path))
       assert(fs.is_dir(foo_path))
@@ -421,7 +418,7 @@ testing("mkdir_rmdir", function()
 end)
 
 testing:exclusive("mkpath_rmpath", function()
-   with_tmpdir(function(tmpdir)
+   fs.with_tmpdir(function(tmpdir)
       local old_umask = process.umask(util.oct("022"))
       local test_path = fs.join(tmpdir, "zsuba/guba/csicseri")
       fs.mkpath(test_path)
@@ -439,7 +436,7 @@ testing:exclusive("mkpath_rmpath", function()
 end)
 
 testing:exclusive("touch", function()
-   with_tmpdir(function(tmpdir)
+   fs.with_tmpdir(function(tmpdir)
       local old_umask = process.umask(util.oct("022"))
       local test_path = fs.join(tmpdir, "touch")
       fs.touch(test_path)

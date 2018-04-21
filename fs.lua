@@ -370,6 +370,23 @@ function M.mktemp(...)
    return path
 end
 
+local tmp_index = 0
+
+function M.with_tmpdir(cb)
+   tmp_index = tmp_index + 1
+   local tmpdir = sf("%s/%s.%d.%d",
+                     env.TMPDIR or '/tmp',
+                     M.basename(arg[0]),
+                     process.getpid(),
+                     tmp_index)
+   M.mkdir(tmpdir)
+   local ok, err = pcall(cb, tmpdir)
+   M.rmpath(tmpdir)
+   if not ok then
+      error(err, 2)
+   end
+end
+
 -- stat
 
 local Stat_mt = {}
