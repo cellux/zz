@@ -127,11 +127,6 @@ testing:exclusive("readable_writable_executable", function()
    assert(fs.is_writable("testdata/hello.txt"))
    assert(not fs.is_executable("testdata/hello.txt"))
 
-   fs.chmod("testdata/hello.txt", 0)
-   assert(not fs.is_readable("testdata/hello.txt"))
-   assert(not fs.is_writable("testdata/hello.txt"))
-   assert(not fs.is_executable("testdata/hello.txt"))
-
    fs.chmod("testdata/hello.txt", util.oct("400"))
    assert(fs.is_readable("testdata/hello.txt"))
    assert(not fs.is_writable("testdata/hello.txt"))
