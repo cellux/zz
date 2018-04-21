@@ -150,31 +150,42 @@ testing("instance metamethods", function()
 end)
 
 testing("chain", function()
-   -- chaining means replacing the __index metamethod of a table with a
-   -- proxy to the original one. the proxy can override any of the keys.
-   
+   -- chaining means replacing the __index metamethod of a table with
+   -- a function or table which can override any of the keys
+
    local A = util.Class()
-   local a = A { x = 5, y = 6 }
-   
-   -- chain with function
-   a = util.chain(a, function(self, name)
+   A.x = 5
+   A.z = 3
+   local B = util.Class(A)
+   local b = B { y = 6 }
+
+   -- chaining with a function
+   b = util.chain(b, function(self, name)
       -- if the function returns a value which is logically true, it is
       -- returned as the lookup result, otherwise, the lookup continues
       -- through the original __index
       return name == "z" and 8
    end)
-   assert.equals(a.x, 5)
-   assert.equals(a.y, 6)
-   assert.equals(a.z, 8)
-   assert.equals(a.w, nil)
+   assert.equals(b.x, 5) -- comes from A
+   assert.equals(b.y, 6) -- comes from b
+   assert.equals(b.z, 8) -- supplied by the chained function
+   assert.equals(b.w, nil)
 
-   -- chain with table
-   a = util.chain(a, { y = 2, w = 7, z = 4 })
-   assert.equals(a.x, 5)
-   assert.equals(a.y, 6) -- y is a direct member of a so we get a.y
+   -- chaining with a table
+   b = util.chain(b, { y = 2, w = 7, z = 4 })
+   assert.equals(b.x, 5) -- comes from A
+   assert.equals(b.y, 6) -- y is a direct member of b so we get b.y
                          -- (__index was not used at all)
-   assert.equals(a.z, 4) -- z is in a descendant so it's overridden
-   assert.equals(a.w, 7)
+   assert.equals(b.z, 4) -- z is in a descendant so it's overridden
+   assert.equals(b.w, 7)
+
+   -- chaining a table which does not yet have a metatable creates one
+   local x = util.chain({ a = 1, b = 2, c = 3 }, { x = 5 })
+   assert.equals(x.a, 1)
+   assert.equals(x.b, 2)
+   assert.equals(x.c, 3)
+   assert.equals(x.x, 5)
+   assert.equals(x.y, nil)
 end)
 
 testing("EventEmitter", function()

@@ -129,7 +129,11 @@ function M.chain(self, index)
       end
    end
    local mt = getmetatable(self)
-   local old_index = mt.__index
+   if not mt then
+      mt = {}
+      setmetatable(self, mt)
+   end
+   local old_index = mt.__index or {}
    local function new_index(self, name)
       return lookup(index, name) or lookup(old_index, name)
    end
