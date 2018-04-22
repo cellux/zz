@@ -271,6 +271,9 @@ testing("stream.read", function()
    local s = stream(f)
    assert(not s:eof())
 
+   -- field lookups on streams fall back to the wrapped object
+   assert.type(s.fd, "number")
+
    -- read(n) reads n bytes
    assert.equals(s:read(1), "\xff")
    assert.equals(s:read(2), "\xd8\xff")

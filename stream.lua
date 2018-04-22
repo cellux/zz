@@ -10,6 +10,12 @@ M.READ_BLOCK_SIZE = 4096
 
 local BaseStream = util.Class()
 
+function BaseStream:create()
+   return {
+      read_buffer = buffer.new()
+   }
+end
+
 function BaseStream:close()
    ef("to be implemented")
 end
@@ -31,9 +37,9 @@ function BaseStream:read(n)
    local buf
    if not n then
       -- read an arbitrary amount of bytes
-      if self.read_buffer then
+      if #self.read_buffer > 0 then
          buf = self.read_buffer
-         self.read_buffer = nil
+         self.read_buffer = buffer.new()
       else
          local ptr, block_size = mm.get_block(READ_BLOCK_SIZE)
          local nbytes = self:read1(ptr, block_size)
@@ -45,11 +51,11 @@ function BaseStream:read(n)
       buf = buffer.new(n)
       local bytes_left = n
       while not self:eof() and bytes_left > 0 do
-         if self.read_buffer then
+         if #self.read_buffer > 0 then
             if #self.read_buffer <= bytes_left then
                buf:append(self.read_buffer)
                bytes_left = bytes_left - #self.read_buffer
-               self.read_buffer = nil
+               self.read_buffer.len = 0
             else
                buf:append(self.read_buffer, bytes_left)
                -- buffer.slice() makes a copy of read_buffer[bytes_left:]
@@ -68,10 +74,10 @@ function BaseStream:read(n)
       -- read until EOF
       local buffers = {}
       local nbytes_total = 0
-      if self.read_buffer then
+      if #self.read_buffer > 0 then
          table.insert(buffers, self.read_buffer)
          nbytes_total = nbytes_total + #self.read_buffer
-         self.read_buffer = nil
+         self.read_buffer = buffer.new()
       end
       local ptr, block_size = mm.get_block(READ_BLOCK_SIZE)
       while not self:eof() do
@@ -106,7 +112,7 @@ function BaseStream:read_until(marker)
          local marker_offset = p - buf.ptr
          local next_offset = marker_offset + #marker
          if next_offset < #buf then
-            assert(self.read_buffer==nil)
+            assert(#self.read_buffer == 0)
             self.read_buffer = buffer.slice(buf, next_offset)
          end
          return buffer.copy(buf, marker_offset)
@@ -140,13 +146,13 @@ end
 local MemoryStream = util.Class(BaseStream)
 
 function MemoryStream:create()
-   return {
-      buffers = {}
-   }
+   local self = BaseStream:create()
+   self.buffers = {}
+   return self
 end
 
 function MemoryStream:eof()
-   return #self.buffers == 0 and not self.read_buffer
+   return #self.buffers == 0 and #self.read_buffer == 0
 end
 
 function MemoryStream:write1(ptr, size)
@@ -177,6 +183,7 @@ end
 local function is_stream(x)
    return type(x) == "table" and x.is_stream
 end
+M.is_stream = is_stream
 
 local function make_stream(x)
    if is_stream(x) then
@@ -187,12 +194,12 @@ local function make_stream(x)
       s = MemoryStream()
    elseif (type(x)=="table" or type(x)=="cdata") and type(x.stream_impl)=="function" then
       s = BaseStream()
-      return x:stream_impl(s)
+      s = x:stream_impl(s)
    else
       ef("cannot create stream of %s", x)
    end
    s.is_stream = true
-   return s
+   return util.chainlast(s, x)
 end
 
 function M.pipe(s1, s2)

@@ -123,7 +123,7 @@ end
 
 function M.chain(self, index, last)
    local function lookup(index, name)
-      if type(index)=="table" then
+      if type(index)=="table" or type(index)=="cdata" then
          return index[name]
       elseif type(index)=="function" then
          return index(self, name)

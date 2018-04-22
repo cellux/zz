@@ -277,7 +277,7 @@ function File_mt:stream_impl(stream)
       return f:close()
    end
    function stream:eof()
-      return eof and not stream.read_buffer
+      return eof and #stream.read_buffer == 0
    end
    function stream:read1(ptr, size)
       local nbytes = f:read1(ptr, size)
