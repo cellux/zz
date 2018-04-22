@@ -66,7 +66,7 @@ end
 
 M.match = assert_match
 
-local function assert_throws(f, pattern)
+local function assert_throws(pattern, f)
    local ok, err = pcall(f)
    assert_false(ok, sf("%s expected to throw", f), 3)
    assert_match(pattern, err, sf("%s expected to throw an error matching '%s', got: %s", f, pattern, err), 3)

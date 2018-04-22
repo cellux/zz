@@ -314,7 +314,7 @@ testing:nosched("errors thrown by scheduled threads contain a stack trace", func
          throw()
       end)
    end)
-   local err = assert.throws(sched, "not a respectable software company")
+   local err = assert.throws("not a respectable software company", sched)
    assert.match("in function 'throw'", err)
 end)
 

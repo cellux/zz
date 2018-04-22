@@ -156,23 +156,23 @@ testing("uri", function()
       path = "/abc"
    })
    
-   assert.throws(function()
+   assert.throws("path must be empty or begin with a slash character", function()
       tostring(uri {
          scheme = "http",
          host = "example.com",
          path = "abc"
       })
-   end, "path must be empty or begin with a slash character")
+   end)
    
    -- When authority is not present, the path cannot begin with two slash
    -- characters ("//").
    
-   assert.throws(function()
+   assert.throws("path cannot begin with two slash characters", function()
       tostring(uri {
          scheme = "http",
          path = "//abc"
       })
-   end, "path cannot begin with two slash characters")
+   end)
    
    -- example URIs and their component parts
    
@@ -191,22 +191,22 @@ testing("uri", function()
    -- letter and followed by any combination of letters, digits, plus
    -- ("+"), period ("."), or hyphen ("-").
    
-   assert.throws(function()
+   assert.throws("missing scheme", function()
       tostring(uri {
          path = ""
       })
-   end, "missing scheme")
+   end)
    
-   assert.throws(function()
+   assert.throws("invalid scheme", function()
       tostring(uri {
          scheme = "01234",
          path = ""
       })
-   end, "invalid scheme")
+   end)
    
-   assert.throws(function()
+   assert.throws("invalid scheme", function()
       uri("árvíz://dzsunga")
-   end, "invalid scheme")
+   end)
    
    -- An implementation should accept uppercase letters as equivalent to
    -- lowercase in scheme names (e.g., allow "HTTP" as well as "http")
