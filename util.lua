@@ -118,7 +118,7 @@ function M.Class(parent)
    return setmetatable(class, class_mt)
 end
 
-function M.chain(self, index)
+function M.chain(self, index, last)
    local function lookup(index, name)
       if type(index)=="table" then
          return index[name]
@@ -134,11 +134,20 @@ function M.chain(self, index)
       setmetatable(self, mt)
    end
    local old_index = mt.__index or {}
-   local function new_index(self, name)
-      return lookup(index, name) or lookup(old_index, name)
+   if last then
+      mt.__index = function(self, name)
+         return lookup(old_index, name) or lookup(index, name)
+      end
+   else
+      mt.__index = function(self, name)
+         return lookup(index, name) or lookup(old_index, name)
+      end
    end
-   mt.__index = new_index
    return self
+end
+
+function M.chainlast(self, index)
+   return M.chain(self, index, true)
 end
 
 function M.ClassLoader(self, require, package_path)

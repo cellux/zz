@@ -157,7 +157,13 @@ testing("chain", function()
    A.x = 5
    A.z = 3
    local B = util.Class(A)
+   B.y = 8
+   B.w = 4
    local b = B { y = 6 }
+
+   local orig_b = b
+   local orig_b_mt = getmetatable(b)
+   local orig_b_mt__index = getmetatable(b).__index
 
    -- chaining with a function
    b = util.chain(b, function(self, name)
@@ -169,7 +175,17 @@ testing("chain", function()
    assert.equals(b.x, 5) -- comes from A
    assert.equals(b.y, 6) -- comes from b
    assert.equals(b.z, 8) -- supplied by the chained function
-   assert.equals(b.w, nil)
+   assert.equals(b.w, 4) -- comes from B
+   assert.equals(b.o, nil)
+
+   -- the object remains the same
+   assert.equals(b, orig_b)
+
+   -- the metatable remains the same
+   assert.equals(getmetatable(b), orig_b_mt)
+
+   -- but __index is replaced by a proxy
+   assert(getmetatable(b).__index ~= orig_b_mt__index)
 
    -- chaining with a table
    b = util.chain(b, { y = 2, w = 7, z = 4 })
@@ -179,13 +195,41 @@ testing("chain", function()
    assert.equals(b.z, 4) -- z is in a descendant so it's overridden
    assert.equals(b.w, 7)
 
-   -- chaining a table which does not yet have a metatable creates one
-   local x = util.chain({ a = 1, b = 2, c = 3 }, { x = 5 })
+   -- when chaining a table which does not yet have a metatable, a new
+   -- metatable is created automatically
+   local x = { a=1, b=2, c=3 }
+   assert.type(getmetatable(x), "nil")
+   local x = util.chain(x, { x = 5 })
+   assert.type(getmetatable(x), "table")
    assert.equals(x.a, 1)
    assert.equals(x.b, 2)
    assert.equals(x.c, 3)
    assert.equals(x.x, 5)
    assert.equals(x.y, nil)
+end)
+
+testing("chainlast", function()
+   -- the only difference to chain() is that the supplied proxy is
+   -- called only if the key has not been found anywhere
+
+   local A = util.Class()
+   A.x = 5
+   A.z = 3
+   local B = util.Class(A)
+   B.y = 8
+   B.w = 4
+   local b = B { y = 6 }
+
+   b = util.chain(b, { x = 10 })
+   -- with chain(), the proxy is called immediately if the lookup key
+   -- is not found in the object
+   assert.equals(b.x, 10)
+
+   b = util.chainlast(b, { z = 11, p = 7 })
+   -- with chainlast(), the proxy is called only if z cannot be found
+   -- anywhere while traversing the __index chain
+   assert.equals(b.z, 3)
+   assert.equals(b.p, 7)
 end)
 
 testing("EventEmitter", function()
