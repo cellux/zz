@@ -56,13 +56,23 @@ function Buffer_mt:__newindex(i, value)
 end
 
 function Buffer_mt:resize(new_cap)
-   return ffi.C.zz_buffer_resize(self, new_cap)
+   if self.ptr == nil then
+      self.ptr = ffi.C.calloc(new_cap, 1)
+      self.cap = new_cap
+      self.len = 0
+      return new_cap
+   else
+      return ffi.C.zz_buffer_resize(self, new_cap)
+   end
 end
 
 function Buffer_mt:append(data, size)
    size = size or #data
    if is_buffer(data) then
       data = data.ptr
+   end
+   if self.ptr == nil then
+      self:resize(size)
    end
    return ffi.C.zz_buffer_append(self, ffi.cast("void*", data), size)
 end
@@ -126,13 +136,11 @@ is_buffer = function(x)
 end
 M.is_buffer = is_buffer
 
-local nil_buffer = Buffer(nil, 0, 0)
-
 function M.new(cap, len)
    cap = cap or ZZ_BUFFER_DEFAULT_CAPACITY
    len = len or 0
    if cap == 0 then
-      return nil_buffer
+      return Buffer(nil, 0, 0)
    else
       local ptr = ffi.C.calloc(cap, 1)
       return Buffer(ptr, cap, len)
