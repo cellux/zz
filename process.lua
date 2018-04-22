@@ -36,6 +36,7 @@ int execlp (const char *FILENAME,
 
 /* process completion */
 
+void exit (int);
 int kill (pid_t pid, int signum);
 pid_t waitpid (pid_t PID, int *STATUSPTR, int OPTIONS);
 
@@ -43,7 +44,6 @@ pid_t waitpid (pid_t PID, int *STATUSPTR, int OPTIONS);
 
 char *getcwd (char *buf, size_t size);
 int chdir (const char *path);
-void exit (int);
 
 /* file descriptors */
 
@@ -127,7 +127,10 @@ function M.waitpid(pid, options)
    options = options or 0
    local status = ffi.new("int[1]")
    local rv = util.check_errno("waitpid", ffi.C.waitpid(pid, status, options))
-   return rv, tonumber(status[0])
+   status = tonumber(status[0])
+   local ret = bit.rshift(status, 8)
+   local sig = bit.band(status, 0x7f)
+   return rv, ret, sig
 end
 
 function M.getcwd()

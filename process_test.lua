@@ -1,55 +1,84 @@
 local testing = require('testing')('process')
 local process = require('process')
+local signal = require('signal')
 local ffi = require('ffi')
 local assert = require('assert')
 local fs = require('fs')
 local net = require('net')
 local stream = require('stream')
 
+testing("getpid", function()
+   local pid = process.getpid()
+   assert.type(pid, "number")
+   assert(pid > 0)
+end)
+
+-- forking while the scheduler is running is a non-trivial operation
+--
+-- thus :nosched which executes this test before scheduler startup
+
 testing:nosched("getpid, fork, waitpid", function()
-   local ppid = process.getpid()
-   assert(type(ppid) == "number")
+   local parent_pid = process.getpid()
+   assert.type(parent_pid, "number")
    local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM, 0)
    local pid = process.fork()
-   assert(type(pid)=="number")
+   assert.type(pid, "number")
    if pid == 0 then
       -- child
       sp:close()
-      sc = stream(sc)
-      assert(process.getpid() ~= ppid)
-      sc:write(sf("%u\n", process.getpid()))
+      local child_pid = process.getpid()
+      assert(child_pid ~= parent_pid)
+      stream(sc):write(sf("%u\n", child_pid))
       sc:close()
       process.exit()
    else
       -- parent
       sc:close()
-      sp = stream(sp)
-      assert(process.getpid() == ppid)
-      local child_pid = tonumber(sp:readln())
+      assert(process.getpid() == parent_pid)
+      local child_pid = tonumber(stream(sp):readln())
       sp:close()
       assert.equals(child_pid, pid)
       assert.equals(process.waitpid(pid), pid)
    end
 end)
 
-testing:nosched("process.fork(child_fn)", function()
-   local ppid = process.getpid()
+-- the same as above, using some sugar:
+
+testing:nosched("fork(child_fn)", function()
+   local parent_pid = process.getpid()
    local pid, sp = process.fork(function(sc)
-      assert(process.getpid() ~= ppid)
+      -- child
+      -- sp has been closed for us
+      assert(process.getpid() ~= parent_pid)
+      -- sc is already a stream
+      assert(stream.is_stream(sc))
       sc:write(sf("%u\n", process.getpid()))
+      -- sc:close() and process.exit() will be called
    end)
-   assert(process.getpid() == ppid)
+   -- parent
+   -- sc has been closed for us
+   assert(process.getpid() == parent_pid)
+   assert(stream.is_stream(sp))
    local child_pid = tonumber(sp:readln())
    sp:close()
    assert.equals(child_pid, pid)
    assert.equals(process.waitpid(pid), pid)
 end)
 
+testing:nosched("execvp", function()
+   local pid, sp = process.fork(function(sc)
+      -- redirect command's stdout to parent through socket
+      assert.equals(ffi.C.dup2(sc.fd, 1), 1)
+      process.execvp("echo", {"echo", "hello", "world!"})
+      -- process.execvp() doesn't return
+   end)
+   assert.equals(sp:read(0), "hello world!\n")
+   sp:close()
+   assert.equals(process.waitpid(pid), pid)
+end)
+
 testing:nosched("system", function()
-   local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM, 0)
-   local pid = process.fork()
-   if pid == 0 then
-      sp:close()
+   local pid, sp = process.fork(function(sc)
       -- redirect command's stdout to parent through socket
       assert.equals(ffi.C.dup2(sc.fd, 1), 1)
       -- a string argument is passed to the system shell
@@ -58,62 +87,47 @@ testing:nosched("system", function()
       -- a table argument is executed via execvp()
       local status = process.system { "bash", "-c", "(echo hello; echo world) | tr a-z A-Z" }
       assert.equals(status, 0)
-      local status = process.system "bash -c 'exit 123'"
+      local status = process.system "exit 123"
       assert.equals(status, 123)
-      sc:close()
-      process.exit()
-   else
-      sc:close()
-      sp = stream(sp)
-      -- read(0) means read until EOF
-      assert.equals(sp:read(0), "HELLO\nWORLD\n".."HELLO\nWORLD\n")
-      sp:close()
-      assert.equals(process.waitpid(pid), pid)
-   end
+   end)
+   -- read(0) means read until EOF
+   assert.equals(sp:read(0), "HELLO\nWORLD\n".."HELLO\nWORLD\n")
+   sp:close()
+   assert.equals(process.waitpid(pid), pid)
 end)
 
-testing:nosched("execvp", function()
-   local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM, 0)
-   local pid = process.fork()
-   if pid == 0 then
-      sp:close()
-      -- redirect command's stdout to parent through socket
-      assert.equals(ffi.C.dup2(sc.fd, 1), 1)
-      process.execvp("echo", {"echo", "hello", "world!"})
-      -- doesn't return
-   else
-      sc:close()
-      sp = stream(sp)
-      assert.equals(sp:read(), "hello world!\n")
-      sp:close()
-      assert.equals(process.waitpid(pid), pid)
-   end
+testing:nosched("kill, waitpid", function()
+   local pid, sp = process.fork(function(sc)
+     assert.equals(sc:readln(), "prepare")
+     sc:read() -- blocks until SIGTERM
+   end)
+   sp:writeln("prepare")
+   -- kill with signal 0 can be used to check if a process exists
+   assert.equals(process.kill(pid, 0), 0)
+   assert.equals(process.kill(pid, signal.SIGTERM), 0)
+   local wpid, ret, sig = process.waitpid(pid)
+   assert.equals(wpid, pid) -- pid of the process which terminated
+   assert.equals(ret, 0) -- value returned from main()
+   assert.equals(sig, signal.SIGTERM) -- terminating signal
+   sp:close()
 end)
 
-testing:nosched("waitpid, exit", function()
-   local pid = process.fork()
-   if pid == 0 then
-      process.exit(84)
-   else
-      local rv, status = process.waitpid(pid)
-      assert.equals(rv, pid)
-      -- status is a 16-bit word
-      -- high byte is the exit status
-      -- low byte is the cause of termination (0 = normal exit)
-      assert.equals(status, 84*256,
-                    sf("expected=%x, actual=%x", 84*256, status))
-   end
-end)
-   
-testing:nosched("chdir, getcwd", function()
-   local pid = process.fork()
-   if pid == 0 then
+testing:nosched("getcwd, chdir", function()
+   local pid = process.fork(function()
       process.chdir("/tmp")
       assert.equals(process.getcwd(), "/tmp")
-      process.exit()
-   else
-      process.waitpid(pid)
-   end
+   end)
+   process.waitpid(pid)
+end)
+
+testing:nosched("exit", function()
+   local pid = process.fork(function()
+      process.exit(84)
+   end)
+   local rv, ret, sig = process.waitpid(pid)
+   assert.equals(rv, pid)
+   assert.equals(ret, 84) -- return value
+   assert.equals(sig, 0) -- normal termination
 end)
 
 testing:exclusive("umask", function()
