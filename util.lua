@@ -110,6 +110,9 @@ function M.Class(parent)
             end
          end
          for _,k in ipairs(mt_keys) do
+            if k == "__index" then
+               ef("attempt to override __index metamethod")
+            end
             self[k] = nil
          end
       end

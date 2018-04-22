@@ -149,6 +149,20 @@ testing("instance metamethods", function()
    assert.equals(a(10), 18)
 end)
 
+testing("constructor should not override __index", function()
+   local A = util.Class()
+   A.x = 5
+   assert.throws('attempt to override __index metamethod', function()
+      local a = A { __index = {} }
+   end)
+   function A:create()
+      return { __index = {} }
+   end
+   assert.throws('attempt to override __index metamethod', function()
+      local a = A()
+   end)
+end)
+
 testing("chain", function()
    -- chaining means replacing the __index metamethod of a table with
    -- a function or table which can override any of the keys
