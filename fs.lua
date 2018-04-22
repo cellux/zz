@@ -49,9 +49,6 @@ int     symlink (const char *oldname, const char *newname);
 ssize_t readlink (const char *filename, char *buffer, size_t size);
 char   *realpath (const char *name, char *resolved);
 
-int     dup (int old);
-int     dup2 (int old, int new);
-
 char   *dirname (char *path);
 char   *basename (char *path);
 

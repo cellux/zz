@@ -1,6 +1,5 @@
 local testing = require('testing')('globals')
 local assert = require('assert')
-local fs = require('fs') -- for dup2
 local process = require('process')
 local ffi = require('ffi')
 local net = require('net')
@@ -36,7 +35,7 @@ testing:nosched("ef", function()
    local status, err = pcall(function() ef("Hello, %s", "world") end)
    assert.equals(status, false)
    assert.type(err, "string")
-   assert.equals(err, sf("%s:36: Hello, world", test_path))
+   assert.equals(err, sf("%s:35: Hello, world", test_path))
 
    -- if we throw an error from a coroutine running inside the scheduler,
    -- we'd like to get a valid backtrace which correctly shows where the
@@ -53,9 +52,9 @@ testing:nosched("ef", function()
    --
    -- the second part contains the global (non-coroutine-specific)
    -- traceback appended by error()
-   local expected = test_path..[[:46: Hello, world
+   local expected = test_path..[[:45: Hello, world
 stack traceback:
-	]]..test_path..[[:46: in function 'throwit'
-	]]..test_path..[[:48: in function <]]..test_path..[[:48>]]
+	]]..test_path..[[:45: in function 'throwit'
+	]]..test_path..[[:47: in function <]]..test_path..[[:47>]]
    assert.equals(err:sub(1,#expected), expected)
 end)

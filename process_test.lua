@@ -2,7 +2,7 @@ local testing = require('testing')('process')
 local process = require('process')
 local ffi = require('ffi')
 local assert = require('assert')
-local fs = require('fs') -- for dup2
+local fs = require('fs')
 local net = require('net')
 local stream = require('stream')
 

@@ -3,7 +3,6 @@ local env = require('env')
 local assert = require('assert')
 local process = require('process')
 local ffi = require('ffi')
-local fs = require('fs') -- for dup2
 local net = require('net')
 local stream = require('stream')
 

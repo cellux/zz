@@ -45,6 +45,11 @@ char *getcwd (char *buf, size_t size);
 int chdir (const char *path);
 void exit (int);
 
+/* file descriptors */
+
+int     dup (int old);
+int     dup2 (int old, int new);
+
 /* umask */
 
 __mode_t umask (__mode_t mask);
