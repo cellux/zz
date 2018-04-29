@@ -107,9 +107,9 @@ function M.system(command)
       if pid == 0 then
          M.execvp(command[1], command)
       else
-         local wpid, status = M.waitpid(pid)
+         local wpid, ret, sig = M.waitpid(pid)
          assert(wpid==pid)
-         return bit.rshift(status, 8)
+         return ret, sig
       end
    else
       ef("system(): invalid command: %s", command)
