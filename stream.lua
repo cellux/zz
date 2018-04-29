@@ -199,7 +199,7 @@ local function make_stream(x)
       ef("cannot create stream of %s", x)
    end
    s.is_stream = true
-   return util.chainlast(s, x)
+   return x and util.chainlast(s, x) or s
 end
 
 function M.pipe(s1, s2)
