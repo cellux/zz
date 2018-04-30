@@ -127,5 +127,5 @@ void zz_async_echo(struct zz_async_echo *r) {
 
 void *zz_async_handlers[] = {
   zz_async_echo,
-  NULL
+  0
 };

@@ -125,5 +125,5 @@ void *zz_async_fs_handlers[] = {
   zz_async_fs_close,
   zz_async_fs_stat,
   zz_async_fs_lstat,
-  NULL
+  0
 };
