@@ -148,26 +148,26 @@ enum {
 
 void *zz_async_fs_handlers[];
 
-struct zz_async_fs_lseek_request {
+struct zz_async_fs_lseek {
   int fd;
   __off_t offset;
   int whence;
   __off_t rv;
 };
 
-struct zz_async_fs_read_write_request {
+struct zz_async_fs_read_write {
   int fd;
   void *buf;
   size_t count;
   ssize_t nbytes;
 };
 
-struct zz_async_fs_close_request {
+struct zz_async_fs_close {
   int fd;
   int rv;
 };
 
-struct zz_async_fs_stat_request {
+struct zz_async_fs_stat {
   char *path;
   struct stat *buf;
   int rv;
@@ -186,7 +186,7 @@ local File_mt = {}
 local function lseek(fd, offset, whence)
    local rv
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_lseek_request")
+      local req, block_size = mm.get_block("struct zz_async_fs_lseek")
       req.fd = fd
       req.offset = offset
       req.whence = whence
@@ -213,7 +213,7 @@ end
 function File_mt:read1(ptr, size)
    local nbytes = 0
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_read_write_request")
+      local req, block_size = mm.get_block("struct zz_async_fs_read_write")
       req.fd = self.fd
       req.buf = ptr
       req.count = size
@@ -229,7 +229,7 @@ end
 function File_mt:write1(ptr, size)
    local nbytes = 0
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_read_write_request")
+      local req, block_size = mm.get_block("struct zz_async_fs_read_write")
       req.fd = self.fd
       req.buf = ptr
       req.count = size
@@ -256,7 +256,7 @@ function File_mt:close()
    if self.fd >= 0 then
       local rv
       if sched.ticking() then
-         local req, block_size = mm.get_block("struct zz_async_fs_close_request")
+         local req, block_size = mm.get_block("struct zz_async_fs_close")
          req.fd = self.fd
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSE, req)
          rv = req.rv
@@ -374,7 +374,7 @@ local Stat_mt = {}
 
 function Stat_mt:stat(path)
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_stat_request")
+      local req, block_size = mm.get_block("struct zz_async_fs_stat")
       req.path = ffi.cast("char*", path)
       req.buf = self.buf
       async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_STAT, req)
@@ -387,7 +387,7 @@ end
 
 function Stat_mt:lstat(path)
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_stat_request")
+      local req, block_size = mm.get_block("struct zz_async_fs_stat")
       req.path = ffi.cast("char*", path)
       req.buf = self.buf
       async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSTAT, req)

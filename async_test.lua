@@ -10,7 +10,7 @@ local ASYNC = async.register_worker(ffi.C.zz_async_handlers)
 
 local function make_async_echo_requester(delay, payload, acc)
    return function()
-      local request, block_size = mm.get_block("struct zz_async_echo_request")
+      local request, block_size = mm.get_block("struct zz_async_echo")
       request.delay = delay
       request.payload = payload
       -- zz_async_echo_worker takes a delay and

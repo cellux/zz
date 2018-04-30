@@ -27,7 +27,7 @@ enum {
   ZZ_ASYNC_ECHO
 };
 
-struct zz_async_echo_request {
+struct zz_async_echo {
   double delay;
   double payload;
   double response;

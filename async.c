@@ -107,13 +107,13 @@ enum {
   ZZ_ASYNC_ECHO
 };
 
-struct zz_async_echo_request {
+struct zz_async_echo {
   double delay;
   double payload;
   double response;
 };
 
-void zz_async_echo(struct zz_async_echo_request *r) {
+void zz_async_echo(struct zz_async_echo *r) {
   double fractional_part, integer_part;
   fractional_part = modf(r->delay, &integer_part);
   struct timespec rqtp;

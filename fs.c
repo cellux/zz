@@ -13,38 +13,38 @@ enum {
   ZZ_ASYNC_FS_LSTAT
 };
 
-struct zz_async_fs_lseek_request {
+struct zz_async_fs_lseek {
   int fd;
   off_t offset;
   int whence;
   off_t rv;
 };
 
-void zz_async_fs_lseek(struct zz_async_fs_lseek_request *req) {
+void zz_async_fs_lseek(struct zz_async_fs_lseek *req) {
   req->rv = lseek(req->fd, req->offset, req->whence);
 }
 
-struct zz_async_fs_read_write_request {
+struct zz_async_fs_read_write {
   int fd;
   void *buf;
   size_t count;
   ssize_t nbytes;
 };
 
-void zz_async_fs_read(struct zz_async_fs_read_write_request *req) {
+void zz_async_fs_read(struct zz_async_fs_read_write *req) {
   req->nbytes = read(req->fd, req->buf, req->count);
 }
 
-void zz_async_fs_write(struct zz_async_fs_read_write_request *req) {
+void zz_async_fs_write(struct zz_async_fs_read_write *req) {
   req->nbytes = write(req->fd, req->buf, req->count);
 }
 
-struct zz_async_fs_close_request {
+struct zz_async_fs_close {
   int fd;
   int rv;
 };
 
-void zz_async_fs_close(struct zz_async_fs_close_request *req) {
+void zz_async_fs_close(struct zz_async_fs_close *req) {
   req->rv = close(req->fd);
 }
 
@@ -104,17 +104,17 @@ const char * zz_fs_type(__mode_t mode) {
     return NULL;
 }
 
-struct zz_async_fs_stat_request {
+struct zz_async_fs_stat {
   char *path;
   struct stat *buf;
   int rv;
 };
 
-void zz_async_fs_stat(struct zz_async_fs_stat_request *req) {
+void zz_async_fs_stat(struct zz_async_fs_stat *req) {
   req->rv = stat(req->path, req->buf);
 }
 
-void zz_async_fs_lstat(struct zz_async_fs_stat_request *req) {
+void zz_async_fs_lstat(struct zz_async_fs_stat *req) {
   req->rv = lstat(req->path, req->buf);
 }
 
