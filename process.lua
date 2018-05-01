@@ -150,15 +150,19 @@ function M.waitpid(pid, options)
 end
 
 function M.create(opts)
-   local self = {}
+   local self = {
+      channels = {}
+   }
 
    if type(opts) == "string" then
       opts = { command = opts }
    end
+
    if type(opts.command) == "string" then
       -- string commands are executed via the system shell
       opts.command = { "/bin/sh", "-c", opts.command }
    end
+
    assert(opts.command and type(opts.command) == "table")
 
    local function is_channel(x)
@@ -168,18 +172,21 @@ function M.create(opts)
    local function Channel(owner, name, fd, direction)
       local self = {
          is_channel = true,
-         has_peer = false
+         redirect_target = nil
       }
 
-      function self:materialize(has_peer)
-         self.has_peer = has_peer or false
+      function self:materialize()
          if not self.sp then
             self.sp, self.sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM, 0)
          end
       end
 
+      function self:redirect_to(channel)
+         self:materialize()
+         self.redirect_target = channel
+      end
+
       function self:socket()
-         assert(not self.has_peer)
          self:materialize()
          return self.sp
       end
@@ -226,8 +233,12 @@ function M.create(opts)
 
       if peer then
          if is_channel(peer) then
-            peer:materialize(true)
+            -- peer subprocess writes/reads peer.sc
+            -- this subprocess reads/writes peer.sp
+            peer:redirect_to(self)
          else
+            -- subprocess reads/writes peer.sc
+            -- pump thread writes/reads peer.sp
             self:materialize()
             if direction == "in" then
                self.pump = create_writer(peer)
@@ -244,8 +255,8 @@ function M.create(opts)
             peer.sp.O_NONBLOCK = false
             assert(ffi.C.dup2(peer.sp.fd, fd) == fd)
          elseif self.sp then
-            if self.has_peer then
-               -- closing sp would disrupt communication with peer
+            if self.redirect_target then
+               -- closing sp would disrupt communication
             else
                self.sp:close()
             end
@@ -277,16 +288,28 @@ function M.create(opts)
       return self
    end
 
-   -- Channel(owner, name, fd, direction)
-   self.stdin = Channel(self, "stdin", 0, "in")
-   self.stdout = Channel(self, "stdout", 1, "out")
-   self.stderr = Channel(self, "stderr", 2, "out")
+   function self:add_channel(name, fd, direction)
+      local channel = Channel(self, name, fd, direction)
+      table.insert(self.channels, channel)
+      return channel
+   end
 
-   local channels = {
-      self.stdin,
-      self.stdout,
-      self.stderr
-   }
+   self.stdin = self:add_channel("stdin", 0, "in")
+   self.stdout = self:add_channel("stdout", 1, "out")
+   self.stderr = self:add_channel("stderr", 2, "out")
+
+   local function invoke_on_all_channels(method)
+      if type(method) == "string" then
+         invoke_on_all_channels(function(channel)
+            local f = channel[method]
+            f(channel)
+         end)
+      else
+         for _,channel in ipairs(self.channels) do
+            method(channel)
+         end
+      end
+   end
 
    function self:start()
       self.pid = util.check_errno("fork", ffi.C.fork())
@@ -294,15 +317,11 @@ function M.create(opts)
          if type(opts.pre_exec) == "function" then
             opts.pre_exec()
          end
-         for _,channel in ipairs(channels) do
-            channel:setup_in_child()
-         end
+         invoke_on_all_channels("setup_in_child")
          M.execvp(opts.command[1], opts.command)
          ef("execvp failed")
       else
-         for _,channel in ipairs(channels) do
-            channel:setup_in_parent()
-         end
+         invoke_on_all_channels("setup_in_parent")
       end
       return self
    end
@@ -312,11 +331,11 @@ function M.create(opts)
          self:start()
       end
       local pump_threads = {}
-      for _,channel in ipairs(channels) do
+      invoke_on_all_channels(function(channel)
          if channel.pump_thread then
             table.insert(pump_threads, channel.pump_thread)
          end
-      end
+      end)
       sched.join(pump_threads)
       local wpid, exit_status, term_signal = M.waitpid(self.pid)
       assert(wpid == self.pid)
@@ -329,9 +348,7 @@ function M.create(opts)
    end
 
    function self:close()
-      for _,channel in ipairs(channels) do
-         channel:close()
-      end
+      invoke_on_all_channels("close")
    end
 
    local mt = {
