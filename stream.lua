@@ -202,7 +202,7 @@ local function make_stream(x)
    return x and util.chainlast(s, x) or s
 end
 
-function M.pipe(s1, s2)
+function M.pipe(s1, s2, close_s2)
    s1 = make_stream(s1)
    s2 = make_stream(s2)
    return sched(function()
@@ -211,10 +211,16 @@ function M.pipe(s1, s2)
          local nbytes = s1:read1(ptr, block_size)
          s2:write1(ptr, nbytes)
       end
-      s1:close()
-      s2:close()
       mm.ret_block(ptr, block_size)
+      s1:close()
+      if close_s2 then
+         s2:close()
+      end
    end)
+end
+
+function M.pipe_close(s1, s2)
+   return M.pipe(s1, s2, true)
 end
 
 local M_mt = {}

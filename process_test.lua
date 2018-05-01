@@ -65,7 +65,7 @@ testing:nosched("fork(child_fn)", function()
    assert.equals(process.waitpid(pid), pid)
 end)
 
-testing:nosched("execvp", function()
+testing("execvp", function()
    local pid, sp = process.fork(function(sc)
       -- redirect command's stdout to parent through socket
       assert.equals(ffi.C.dup2(sc.fd, 1), 1)
@@ -73,25 +73,6 @@ testing:nosched("execvp", function()
       -- process.execvp() doesn't return
    end)
    assert.equals(sp:read(0), "hello world!\n")
-   sp:close()
-   assert.equals(process.waitpid(pid), pid)
-end)
-
-testing:nosched("system", function()
-   local pid, sp = process.fork(function(sc)
-      -- redirect command's stdout to parent through socket
-      assert.equals(ffi.C.dup2(sc.fd, 1), 1)
-      -- a string argument is passed to the system shell
-      local status = process.system("(echo hello; echo world) | tr a-z A-Z")
-      assert.equals(status, 0)
-      -- a table argument is executed via execvp()
-      local status = process.system { "bash", "-c", "(echo hello; echo world) | tr a-z A-Z" }
-      assert.equals(status, 0)
-      local status = process.system "exit 123"
-      assert.equals(status, 123)
-   end)
-   -- read(0) means read until EOF
-   assert.equals(sp:read(0), "HELLO\nWORLD\n".."HELLO\nWORLD\n")
    sp:close()
    assert.equals(process.waitpid(pid), pid)
 end)
@@ -113,17 +94,19 @@ testing:nosched("kill, waitpid", function()
 end)
 
 testing:nosched("getcwd, chdir", function()
-   local pid = process.fork(function()
+   local pid, sp = process.fork(function()
       process.chdir("/tmp")
       assert.equals(process.getcwd(), "/tmp")
    end)
    process.waitpid(pid)
+   sp:close()
 end)
 
 testing:nosched("exit", function()
-   local pid = process.fork(function()
+   local pid, sp = process.fork(function()
       process.exit(84)
    end)
+   sp:close()
    local rv, ret, sig = process.waitpid(pid)
    assert.equals(rv, pid)
    assert.equals(ret, 84) -- return value
@@ -144,4 +127,104 @@ testing:exclusive("umask", function()
    assert.equals(fs.rmdir(tmpdir), 0)
    assert.equals(process.umask(old_umask), new_umask)
    assert.equals(process.umask(), old_umask)
+end)
+
+testing("start", function()
+   local p = process.start {
+      command = "true"
+   }
+   -- p.pid is the process id of the started subprocess
+   assert.type(p.pid, "number")
+   -- p:wait() waits for the process to exit
+   local rv = p:wait()
+   -- p:wait() returns self to ease chaining
+   assert.equals(rv, p)
+   assert.equals(p.exit_status, 0)
+   assert.equals(p.term_signal, 0)
+
+   local p = process.start {
+      command = "false"
+   }
+   p:wait()
+   assert.equals(p.exit_status, 1)
+   assert.equals(p.term_signal, 0)
+end)
+
+testing("start with args and pre_exec", function()
+   local sp, sc = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM, 0)
+   local p = process.start {
+      command = { "echo", "hello", "world" },
+      pre_exec = function()
+         sp:close()
+         -- redirect stdout of child into sc
+         assert.equals(ffi.C.dup2(sc.fd, 1), 1)
+         -- sc will be closed automatically when the subprocess exits
+      end
+   }
+   sc:close()
+   p:wait()
+   assert.equals(stream(sp):readln(), "hello world")
+   sp:close()
+end)
+
+testing("start with capture", function()
+   local p = process.start {
+      command = "echo 'hello world'; echo -n 'bad' >&2",
+      stdout = "capture",
+      stderr = "capture",
+   }
+   p:wait()
+   assert.equals(p.stdout, "hello world\n")
+   assert.equals(p.stderr, "bad")
+end)
+
+testing("start with a string on stdin", function()
+   local p = process.start {
+      command = { "sed", "-e", "s/Joe/Mike/" },
+      stdin = "Hello, Joe\n",
+      stdout = "capture",
+   }
+   p:wait()
+   assert.equals(p.stdout, "Hello, Mike\n")
+end)
+
+testing("system", function()
+   local status = process.system("exit 123")
+   assert.equals(status, 123)
+end)
+
+testing("capture", function()
+   -- a string argument is passed to the system shell
+   local status, stdout, stderr = process.capture("(echo hello; echo world) | tr a-z A-Z")
+   assert.equals(status, 0)
+   assert.equals(stdout, "HELLO\nWORLD\n")
+   assert.equals(stderr, "")
+
+   -- a table argument is executed via execvp()
+   local status, stdout, stderr = process.capture {
+      "bash", "-c",
+      "(echo hello; echo world >&2) | tr a-z A-Z"
+   }
+   assert.equals(status, 0)
+   assert.equals(stdout, "HELLO\n")
+   assert.equals(stderr, "world\n")
+
+   local status, stdout, stderr = process.capture("exit 123")
+   assert.equals(status, 123)
+   assert.equals(stdout, "")
+   assert.equals(stderr, "")
+end)
+
+testing("process groups", function()
+   local pg = process.Group()
+   local echo = pg:create {
+      command = { "echo", "Hello, Joe" }
+   }
+   local sed = pg:create {
+      command = { "sed", "-e", "s/Joe/Mike/" },
+      stdin = echo.stdout,
+      stdout = "capture"
+   }
+   pg:wait()
+   assert.equals(sed.stdout, "Hello, Mike\n")
 end)

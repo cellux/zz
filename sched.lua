@@ -521,9 +521,15 @@ local function Scheduler() -- scheduler constructor
          return OFF
       end
       for _,t in ipairs(threadlist) do
-         self.on(t, thread_is_dead)
+         if coroutine.status(t) ~= "dead" then
+            self.on(t, thread_is_dead)
+         else
+            count = count - 1
+         end
       end
-      self.wait(all_done)
+      if count > 0 then
+         self.wait(all_done)
+      end
    end
 
    function self.quit(evdata)
