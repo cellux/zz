@@ -2,6 +2,18 @@ local util = require('util')
 
 local M = {}
 
+local function fdcount()
+   local fs = require('fs')
+   local count = 0
+   local dir = "/proc/self/fd"
+   for entry in fs.readdir(dir) do
+      if fs.is_lnk(fs.join(dir, entry)) then
+         count = count + 1
+      end
+   end
+   return count
+end
+
 -- Test
 
 local Test = util.Class()
@@ -131,6 +143,7 @@ function TestSuite:run(tc)
       t:run(tc)
       report(t)
    end
+   local fdcount_at_start = fdcount()
    self:walk(run_test, function(t) return t:is_nosched() end)
    local sched = require('sched')
    local function sched_test(t)
@@ -142,6 +155,10 @@ function TestSuite:run(tc)
    end
    self:walk(sched_test, function(t) return not t:is_nosched() end)
    sched()
+   local fdcount_at_end = fdcount()
+   if fdcount_at_start ~= fdcount_at_end then
+      pf("detected file descriptor leakage: fdcount at start: %d, fdcount at end: %d", fdcount_at_start, fdcount_at_end)
+   end
 end
 
 M.TestSuite = TestSuite
