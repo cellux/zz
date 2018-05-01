@@ -25,7 +25,6 @@ typedef __UWORD_TYPE nlink_t;
 typedef __SWORD_TYPE fsword_t;
 typedef __SWORD_TYPE off_t;
 typedef      int64_t off64_t;
-typedef      int32_t pid_t;
 typedef __UWORD_TYPE rlim_t;
 typedef     uint64_t rlim64_t;
 typedef __SWORD_TYPE blkcnt_t;
