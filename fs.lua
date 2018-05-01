@@ -13,10 +13,10 @@ local stream = require('stream')
 
 ffi.cdef [[
 
-int     open (const char *file, int oflag, __mode_t mode);
-ssize_t read (int fd, void *buf, size_t nbytes);
+int     open  (const char *file, int oflag, mode_t mode);
+ssize_t read  (int fd, void *buf, size_t nbytes);
 ssize_t write (int fd, const void *buf, size_t n);
-__off_t lseek (int fd, __off_t offset, int whence);
+off_t   lseek (int fd, off_t offset, int whence);
 int     close (int fd);
 
 struct zz_fs_File_ct {
@@ -29,8 +29,8 @@ int futimens(int fd, const struct timespec times[2]);
 
 /* creation of temporary files/directories */
 
-int mkstemp (char *template);
-char *mkdtemp (char *template);
+int    mkstemp (char *template);
+char * mkdtemp (char *template);
 
 enum {
   R_OK = 4,
@@ -39,17 +39,17 @@ enum {
   F_OK = 0
 };
 
-int     access (const char *path, int mode);
-int     chmod (const char *file, __mode_t mode);
-int     unlink (const char *filename);
-int     mkdir (const char *file, __mode_t mode);
-int     rmdir (const char *filename);
+int     access   (const char *path, int how);
+int     chmod    (const char *file, mode_t mode);
+int     unlink   (const char *filename);
+int     mkdir    (const char *file, mode_t mode);
+int     rmdir    (const char *filename);
 
-int     symlink (const char *oldname, const char *newname);
+int     symlink  (const char *oldname, const char *newname);
 ssize_t readlink (const char *filename, char *buffer, size_t size);
 char   *realpath (const char *name, char *resolved);
 
-char   *dirname (char *path);
+char   *dirname  (char *path);
 char   *basename (char *path);
 
 struct zz_fs_Stat_ct {
@@ -57,25 +57,25 @@ struct zz_fs_Stat_ct {
 };
 
 struct stat *     zz_fs_Stat_new();
-__dev_t           zz_fs_Stat_dev(struct stat *);
-__ino_t           zz_fs_Stat_ino(struct stat *);
-__mode_t          zz_fs_Stat_mode(struct stat *);
-__mode_t          zz_fs_Stat_type(struct stat *buf);
-__mode_t          zz_fs_Stat_perms(struct stat *buf);
-__nlink_t         zz_fs_Stat_nlink(struct stat *);
-__uid_t           zz_fs_Stat_uid(struct stat *);
-__gid_t           zz_fs_Stat_gid(struct stat *);
-__dev_t           zz_fs_Stat_rdev(struct stat *);
-__off_t           zz_fs_Stat_size(struct stat *);
-__blksize_t       zz_fs_Stat_blksize(struct stat *);
-__blkcnt_t        zz_fs_Stat_blocks(struct stat *);
+dev_t             zz_fs_Stat_dev(struct stat *);
+ino_t             zz_fs_Stat_ino(struct stat *);
+mode_t            zz_fs_Stat_mode(struct stat *);
+mode_t            zz_fs_Stat_type(struct stat *buf);
+mode_t            zz_fs_Stat_perms(struct stat *buf);
+nlink_t           zz_fs_Stat_nlink(struct stat *);
+uid_t             zz_fs_Stat_uid(struct stat *);
+gid_t             zz_fs_Stat_gid(struct stat *);
+dev_t             zz_fs_Stat_rdev(struct stat *);
+off_t             zz_fs_Stat_size(struct stat *);
+blksize_t         zz_fs_Stat_blksize(struct stat *);
+blkcnt_t          zz_fs_Stat_blocks(struct stat *);
 struct timespec * zz_fs_Stat_atime(struct stat *);
 struct timespec * zz_fs_Stat_mtime(struct stat *);
 struct timespec * zz_fs_Stat_ctime(struct stat *);
 void              zz_fs_Stat_free(struct stat *);
 
-int zz_fs_stat(const char *path, struct stat *buf);
-int zz_fs_lstat(const char *path, struct stat *buf);
+int zz_fs_stat  (const char *path, struct stat *buf);
+int zz_fs_lstat (const char *path, struct stat *buf);
 
 typedef struct __dirstream DIR;
 
@@ -83,11 +83,12 @@ struct zz_fs_Dir_ct {
   DIR *dir;
 };
 
-DIR *opendir(const char *path);
+DIR * opendir(const char *path);
 struct dirent * readdir (DIR *dir);
 int closedir (DIR *dir);
 
 /* glob flags */
+
 enum {
   GLOB_ERR         = (1 << 0),  /* Return on read errors.  */
   GLOB_MARK        = (1 << 1),  /* Append a slash to each name.  */
@@ -108,6 +109,7 @@ enum {
 };
 
 /* glob errors */
+
 enum {
   GLOB_NOSPACE = 1, /* Ran out of memory.  */
   GLOB_ABORTED = 2, /* Read error.         */
@@ -128,12 +130,12 @@ typedef struct {
   int    (*gl_stat)     (const char *, void *);
 } glob_t;
 
-int glob (const char *pattern, int flags, int (*errfunc) (const char *, int), glob_t *pglob);
+int  glob     (const char *pattern, int flags, int (*errfunc) (const char *, int), glob_t *pglob);
 void globfree (glob_t *pglob);
 
 char * zz_fs_dirent_name(struct dirent *);
 
-const char * zz_fs_type(__mode_t mode);
+const char * zz_fs_type(mode_t mode);
 
 /* async worker */
 
@@ -150,9 +152,9 @@ void *zz_async_fs_handlers[];
 
 struct zz_async_fs_lseek {
   int fd;
-  __off_t offset;
+  off_t offset;
   int whence;
-  __off_t rv;
+  off_t rv;
 };
 
 struct zz_async_fs_read_write {

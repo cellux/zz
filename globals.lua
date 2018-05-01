@@ -1,29 +1,48 @@
 local ffi = require('ffi')
 local sched = require('sched')
 
--- commonly used C types and functions
+if ffi.abi("32bit") then
+   ffi.cdef "typedef uint32_t __UWORD_TYPE"
+   ffi.cdef "typedef int32_t  __SWORD_TYPE"
+elseif ffi.abi("64bit") then
+   ffi.cdef "typedef uint64_t __UWORD_TYPE"
+   ffi.cdef "typedef int64_t  __SWORD_TYPE"
+else
+   ef("unsupported architecture")
+end
+
+-- commonly used C types, constants and functions
 
 ffi.cdef [[
 
-typedef long int ssize_t;
+typedef     uint64_t dev_t;
+typedef     uint32_t uid_t;
+typedef     uint32_t gid_t;
+typedef __UWORD_TYPE ino_t;
+typedef     uint64_t ino64_t;
+typedef     uint32_t mode_t;
+typedef __UWORD_TYPE nlink_t;
+typedef __SWORD_TYPE fsword_t;
+typedef __SWORD_TYPE off_t;
+typedef      int64_t off64_t;
+typedef      int32_t pid_t;
+typedef __UWORD_TYPE rlim_t;
+typedef     uint64_t rlim64_t;
+typedef __SWORD_TYPE blkcnt_t;
+typedef      int64_t blkcnt64_t;
+typedef __UWORD_TYPE fsblkcnt_t;
+typedef     uint64_t fsblkcnt64_t;
+typedef __UWORD_TYPE fsfilcnt_t;
+typedef     uint64_t fsfilcnt64_t;
+typedef     uint32_t id_t;
+typedef      int32_t daddr_t;
+typedef      int32_t key_t;
+typedef __SWORD_TYPE blksize_t;
+typedef __SWORD_TYPE ssize_t;
 
-/* types of struct stat fields */
-
-typedef unsigned long long int __dev_t;
-typedef unsigned long int __ino_t;
-typedef unsigned int __mode_t;
-typedef unsigned int __nlink_t;
-typedef unsigned int __uid_t;
-typedef unsigned int __gid_t;
-typedef long int __off_t;
-typedef long int __blksize_t;
-typedef long int __blkcnt_t;
-
-typedef __off_t off_t; /* TODO: this is not correct */
-
-void *malloc (size_t size);
-void *calloc (size_t count, size_t eltsize);
-void free (void *ptr);
+void * malloc (size_t size);
+void * calloc (size_t count, size_t eltsize);
+void   free   (void *ptr);
 
 enum {
   O_RDONLY    = 00000000,
@@ -52,9 +71,13 @@ enum {
   SEEK_END = 2
 };
 
-ssize_t read (int FILEDES, void *BUFFER, size_t SIZE);
-ssize_t write (int FILEDES, const void *BUFFER, size_t SIZE);
-int close (int FILEDES);
+ssize_t read  (int fd, void *buf, size_t size);
+ssize_t write (int fd, const void *buf, size_t size);
+int     close (int fd);
+
+/* sys/ioctl.h */
+
+int ioctl(int fd, int cmd, ...);
 
 /* fcntl.h */
 

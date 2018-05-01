@@ -5,8 +5,7 @@ local stream = require('stream')
 
 ffi.cdef [[
 
-typedef int __pid_t;
-typedef __pid_t pid_t;
+typedef int pid_t;
 
 /* process identification */
 
@@ -19,26 +18,26 @@ pid_t fork ();
 
 /* execution */
 
-int system (const char *COMMAND);
-int execv (const char *FILENAME,
-           char *const ARGV[]);
-int execl (const char *FILENAME,
-           const char *ARG0,
+int system (const char *command);
+int execv (const char *filename,
+           char *const argv[]);
+int execl (const char *filename,
+           const char *arg0,
            ...);
-int execve (const char *FILENAME,
-            char *const ARGV[],
-            char *const ENV[]);
-int execvp (const char *FILENAME,
-            char *const ARGV[]);
-int execlp (const char *FILENAME,
-            const char *ARG0,
+int execve (const char *filename,
+            char *const argv[],
+            char *const env[]);
+int execvp (const char *filename,
+            char *const argv[]);
+int execlp (const char *filename,
+            const char *arg0,
             ...);
 
 /* process completion */
 
 void exit (int);
 int kill (pid_t pid, int signum);
-pid_t waitpid (pid_t PID, int *STATUSPTR, int OPTIONS);
+pid_t waitpid (pid_t pid, int *statusptr, int options);
 
 /* process state */
 
@@ -47,12 +46,12 @@ int chdir (const char *path);
 
 /* file descriptors */
 
-int     dup (int old);
-int     dup2 (int old, int new);
+int dup (int old);
+int dup2 (int old, int new);
 
 /* umask */
 
-__mode_t umask (__mode_t mask);
+mode_t umask (mode_t mask);
 
 ]]
 

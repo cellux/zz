@@ -2,6 +2,17 @@ local ffi = require('ffi')
 
 ffi.cdef [[
 
+/* sizeof(long) == sizeof(size_t) on Linux ... but not on Windows!
+ *
+ * details: https://stackoverflow.com/a/384672 */
+
+typedef         long clock_t;
+typedef         long time_t;
+typedef     uint32_t useconds_t;
+typedef         long suseconds_t;
+typedef      int32_t clockid_t;
+typedef       void * timer_t;
+
 enum {
   CLOCK_REALTIME           = 0,
   CLOCK_MONOTONIC          = 1,
@@ -16,19 +27,14 @@ enum {
   CLOCK_TAI                = 11
 };
 
-typedef long int __time_t;
-typedef long int __syscall_slong_t;
-
 struct timespec {
-  __time_t tv_sec;
-  __syscall_slong_t tv_nsec;
+  time_t tv_sec;      /* seconds */
+  long int tv_nsec;   /* nanoseconds */
 };
 
-typedef long int __suseconds_t;
-
 struct timeval {
-  __time_t tv_sec;            /* Seconds.  */
-  __suseconds_t tv_usec;      /* Microseconds.  */
+  time_t tv_sec;      /* seconds */
+  long int tv_usec;   /* microseconds */
 };
 
 struct timezone {
@@ -41,8 +47,6 @@ int gettimeofday (struct timeval *TP,
 
 int nanosleep (const struct timespec *requested_time,
                struct timespec *remaining);
-
-typedef int32_t clockid_t;
 
 int clock_gettime(clockid_t clk_id, struct timespec *tp);
 
