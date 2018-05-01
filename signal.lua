@@ -104,7 +104,8 @@ local function SignalModule(sched)
    local function stop_signal_handler_thread()
       assert(signal_handler_thread_id[0] ~= 0)
       -- signal handler thread exits upon receiving SIGALRM
-      process.kill(0, M.SIGALRM)
+      -- pid == nil means send the signal to ourselves
+      process.kill(nil, M.SIGALRM)
       local retval = ffi.new("void*[1]")
       local rv = ffi.C.pthread_join(signal_handler_thread_id[0], retval)
       if rv ~=0 then
