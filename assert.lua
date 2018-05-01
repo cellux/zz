@@ -11,12 +11,14 @@ local function assert_true(x, err, level)
 end
 
 local function assert_false(x, err, level)
+   level = level or 2
    assert_true(x==false, err, level+1)
 end
 
 M.is_false = assert_false
 
 local function assert_nil(x, err, level)
+   level = level or 2
    assert_true(x==nil, err, level+1)
 end
 
