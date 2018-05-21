@@ -104,6 +104,9 @@ function BaseStream:read_until(marker)
    local start_search_at = 0
    while not self:eof() do
       local chunk = self:read()
+      if #chunk == 0 then
+         break
+      end
       buf:append(chunk) -- buffer automatically grows as needed
       local search_ptr = buf.ptr + start_search_at
       local search_len = buf.len - start_search_at
