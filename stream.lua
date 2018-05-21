@@ -123,8 +123,8 @@ function BaseStream:read_until(marker)
    return buf
 end
 
-function BaseStream:readln()
-   return tostring(self:read_until("\x0a"))
+function BaseStream:readln(eol)
+   return tostring(self:read_until(eol or "\x0a"))
 end
 
 function BaseStream:write(data)
@@ -138,9 +138,9 @@ function BaseStream:write(data)
    assert(nbytes==size)
 end
 
-function BaseStream:writeln(line)
+function BaseStream:writeln(line, eol)
    self:write(tostring(line))
-   self:write("\x0a")
+   self:write(eol or "\x0a")
 end
 
 local MemoryStream = util.Class(BaseStream)
