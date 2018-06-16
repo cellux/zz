@@ -5,7 +5,6 @@ local pthread = require('pthread')
 local trigger = require('trigger')
 local inspect = require('inspect')
 local adt = require('adt')
-local errno = require('errno')
 
 ffi.cdef [[
 

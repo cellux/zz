@@ -12,7 +12,6 @@ PACKAGE_MODULES=(
   digest
   env
   epoll
-  err
   errno
   fs
   globals

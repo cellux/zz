@@ -238,7 +238,6 @@ P.exports = {
    "digest",
    "env",
    "epoll",
-   "err",
    "errno",
    "fs",
    "globals",

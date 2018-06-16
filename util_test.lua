@@ -367,3 +367,84 @@ end)
 testing("reverse", function()
    assert.equals(util.reverse({1,2,3,4}), {4,3,2,1})
 end)
+
+local function make_thrower(throw, ...)
+   local throw_args = {...}
+   local function thrower()
+      throw(unpack(throw_args))
+   end
+   local function willthrow()
+      thrower()
+   end
+   local function maythrow()
+      willthrow()
+   end
+   return maythrow
+end
+
+testing("throw", function()
+   local f = make_thrower(util.throw)
+   local ok, e = pcall(f)
+   assert.is_false(ok)
+   assert(util.is_error(e))
+   assert.equals(e.class, "runtime-error")
+   assert.equals(e.msg, "runtime-error")
+   assert.equals(tostring(e), "runtime-error")
+
+   local f = make_thrower(util.throw, "my-error")
+   local ok, e = pcall(f)
+   assert.is_false(ok)
+   assert(util.is_error(e))
+   assert.equals(e.class, "my-error")
+   assert.equals(e.msg, "my-error")
+   assert.equals(tostring(e), "my-error")
+
+   local f = make_thrower(util.throw, "my-error", "this is an error message")
+   local ok, e = pcall(f)
+   assert.is_false(ok)
+   assert(util.is_error(e))
+   assert.equals(e.class, "my-error")
+   assert.equals(e.msg, "this is an error message")
+   assert.equals(tostring(e), "this is an error message")
+   -- we also get a traceback of the location where the error was thrown
+   local traceback_pattern = "^this is an error message\nstack traceback:\n\\s+[^[:space:]]+/util_test\\.lua:\\d+: in function 'thrower'\n"
+   assert.match(traceback_pattern, e.traceback, sf("traceback does not match pattern '%s':\n%s", traceback_pattern, e.traceback))
+end)
+
+testing("throw1", function()
+   local f = make_thrower(util.throw1, { a=5, b=8, class = make_thrower, msg = "boo" })
+   local ok, e = pcall(f)
+   assert.is_false(ok)
+   assert(util.is_error(e))
+   assert.equals(e.class, make_thrower)
+   assert.equals(e.msg, "boo")
+   assert.equals(tostring(e), "boo")
+   assert.equals(e.a, 5)
+   assert.equals(e.b, 8)
+end)
+
+testing("throwat", function()
+   local f = make_thrower(util.throwat, 2, "my-error", "this is an error message")
+   local ok, e = pcall(f)
+   assert.is_false(ok)
+   assert(util.is_error(e))
+   assert.equals(e.class, "my-error")
+   assert.equals(e.msg, "this is an error message")
+   assert.equals(tostring(e), "this is an error message")
+   local traceback_pattern = "^this is an error message\nstack traceback:\n\\s+[^[:space:]]+/util_test\\.lua:\\d+: in function 'willthrow'\n"
+   assert.match(traceback_pattern, e.traceback, sf("traceback does not match pattern '%s':\n%s", traceback_pattern, e.traceback))
+end)
+
+testing("throw1at", function()
+   local f = make_thrower(util.throw1at, 2, { a=5, b=8, class = make_thrower, msg = "boo" })
+   local ok, e = pcall(f)
+   assert.is_false(ok)
+   assert(util.is_error(e))
+   assert.equals(e.class, make_thrower)
+   assert.equals(e.msg, "boo")
+   assert.equals(tostring(e), "boo")
+   assert.equals(e.a, 5)
+   assert.equals(e.b, 8)
+   local traceback_pattern = "^boo\nstack traceback:\n\\s+[^[:space:]]+/util_test\\.lua:\\d+: in function 'willthrow'\n"
+   assert.match(traceback_pattern, e.traceback, sf("traceback does not match pattern '%s':\n%s", traceback_pattern, e.traceback))
+end)

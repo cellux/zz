@@ -1,12 +1,13 @@
 local re = require('re')
+local util = require('util')
 
 local M = {}
 
 local function assert_true(x, err, level)
    err = err or "assertion failed!"
-   level = level or 2
    if x ~= true then
-      error(err, level)
+      level = (level or 1) + 1
+      util.throwat(level, "assertion-error", err)
    end
 end
 
@@ -71,7 +72,7 @@ M.match = assert_match
 local function assert_throws(pattern, f)
    local ok, err = pcall(f)
    assert_false(ok, sf("%s expected to throw", f), 3)
-   assert_match(pattern, err, sf("%s expected to throw an error matching '%s', got: %s", f, pattern, err), 3)
+   assert_match(pattern, tostring(err), sf("%s expected to throw an error matching '%s', got: %s", f, pattern, err), 3)
    return err
 end
 

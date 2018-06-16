@@ -9,7 +9,7 @@ testing("true", function()
    end
    local status, err = pcall(test_assert_true)
    assert(not status)
-   assert(re.match("5!=3", err), sf("err=%s does not match 5!=3", err))
+   assert(re.match("5!=3", tostring(err)), sf("err=%s does not match 5!=3", err))
 end)
 
 testing("type", function()
@@ -19,7 +19,7 @@ testing("type", function()
    end
    local status, err = pcall(test_assert_type)
    assert(not status)
-   assert(re.match("type\\(s\\)==string, expected number", err))
+   assert(re.match("type\\(s\\)==string, expected number", tostring(err)))
 end)
 
 testing("equals", function()
@@ -30,5 +30,5 @@ testing("equals", function()
    end
    local status, err = pcall(test_assert_equals)
    assert(not status)
-   assert(re.match("a\\[3\\]\\[c\\]\\[2\\] is 8, expected 9", err))
+   assert(re.match("a\\[3\\]\\[c\\]\\[2\\] is 8, expected 9", tostring(err)))
 end)

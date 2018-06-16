@@ -31,30 +31,6 @@ function M.next_power_of_2(x)
    return rv
 end
 
-function M.check_ok(funcname, okvalue, rv)
-   if rv ~= okvalue then
-      error(sf("%s() failed: %s", funcname, rv), 2)
-   else
-      return rv
-   end
-end
-
-function M.check_bad(funcname, badvalue, rv)
-   if rv == badvalue then
-      error(sf("%s() failed: %s", funcname, rv), 2)
-   else
-      return rv
-   end
-end
-
-function M.check_errno(funcname, rv)
-   if rv == -1 then
-      error(sf("%s() failed: %s", funcname, errno.strerror()), 2)
-   else
-      return rv
-   end
-end
-
 function M.Counter()
    local count = 0
    return function()
@@ -315,6 +291,67 @@ function M.reverse(t)
       table.insert(rv, t[i])
    end
    return rv
+end
+
+-- error handling
+
+function M.throw1at(level, err)
+   level = (level or 1) + 1
+   if type(err) ~= "table" then
+      ef("throw1at: second arg (error object) must be a table")
+   end
+   err.class = err.class or "runtime-error"
+   err.msg = err.msg or tostring(err.class)
+   err.__tostring = err.__tostring or function(self) return self.msg end
+   err = setmetatable(err, err) -- activate __tostring
+   err.traceback = debug.traceback(tostring(err), level)
+   error(err, 0)
+end
+
+function M.throwat(level, class, msg)
+   level = (level or 1) + 1
+   M.throw1at(level, { class = class, msg = msg })
+end
+
+function M.throw1(err)
+   M.throw1at(2, err)
+end
+
+function M.throw(class, msg)
+   M.throw1at(2, { class = class, msg = msg })
+end
+
+function M.is_error(err)
+   return type(err)=="table" and err.class and err.traceback
+end
+
+function M.check_ok(funcname, okvalue, rv)
+   if rv ~= okvalue then
+      error(sf("%s() failed: %s", funcname, rv), 2)
+   else
+      return rv
+   end
+end
+
+function M.check_bad(funcname, badvalue, rv)
+   if rv == badvalue then
+      error(sf("%s() failed: %s", funcname, rv), 2)
+   else
+      return rv
+   end
+end
+
+function M.check_errno(funcname, rv)
+   if rv == -1 then
+      local _errno = errno.errno()
+      M.throw1at {
+         class = "libc-error",
+         msg = sf("%s() failed: %s", funcname, errno.strerror(_errno)),
+         errno = _errno,
+      }
+   else
+      return rv
+   end
 end
 
 return M

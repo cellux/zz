@@ -1,5 +1,6 @@
 local ffi = require('ffi')
 local sched = require('sched')
+local util = require('util')
 
 if ffi.abi("32bit") then
    ffi.cdef "typedef uint32_t __UWORD_TYPE"
@@ -102,9 +103,5 @@ end
 
 function _G.ef(fmt, ...)
    local msg = string.format(fmt, ...)
-   if sched.ticking() then
-      -- append stack trace of the current thread
-      msg = sf("%s%s", msg, debug.traceback("", 2))
-   end
-   error(msg, 2)
+   util.throw1at(2, { msg = msg })
 end
