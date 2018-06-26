@@ -50,8 +50,8 @@ testing("subscriber does not see published messages until connection is establis
    -- the pub socket are permanently lost.
    
    nn.send(pub_sock, "hello")
-   assert(nn.recv(sub_sock, nn.DONTWAIT)==nil)
-   
+   assert.is_nil(nn.recv(sub_sock, nn.DONTWAIT), "hello message arrived, contrary to expectations")
+
    nn.close(sub_sock)
    nn.close(pub_sock)
 end)

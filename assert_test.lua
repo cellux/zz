@@ -26,9 +26,21 @@ testing("equals", function()
    local function test_assert_equals()
       local a = {'a','b',{c={5,8}},true,false}
       local b = {'a','b',{c={5,9}},true,false}
-      assert.equals(a, b, "a")
+      assert.equals(a, b)
    end
    local status, err = pcall(test_assert_equals)
    assert(not status)
-   assert(re.match("a\\[3\\]\\[c\\]\\[2\\] is 8, expected 9", tostring(err)))
+   local pattern = [[^got:
+
+{ "a", "b", {
+    c = { 5, 8 }
+  }, true, false }
+
+expected:
+
+{ "a", "b", {
+    c = { 5, 9 }
+  }, true, false }
+$]]
+   assert(re.match(pattern, tostring(err)), sf("%s does not match %s", err, pattern))
 end)
