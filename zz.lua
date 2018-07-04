@@ -769,10 +769,14 @@ function BuildContext:main_targets(name, bootstrap_code)
       dirname = zzctx.srcdir,
       basename = "_main.tpl.lua"
    }
+   local package_lua = ctx:Target {
+      dirname = ctx.srcdir,
+      basename = "package.lua"
+   }
    local main_lua = ctx:Target {
       dirname = ctx.tmpdir,
       basename = sf("%s.lua", name),
-      depends = main_tpl_lua,
+      depends = { main_tpl_lua, package_lua },
       build = function(self)
          local f = stream(fs.open(self.path, bit.bor(ffi.C.O_CREAT,
                                               ffi.C.O_WRONLY,
