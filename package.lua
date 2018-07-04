@@ -241,6 +241,7 @@ P.exports = {
    "errno",
    "fs",
    "globals",
+   "http",
    "inspect",
    "mm",
    "msgpack",

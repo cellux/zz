@@ -15,6 +15,7 @@ PACKAGE_MODULES=(
   errno
   fs
   globals
+  http
   inspect
   mm
   msgpack
