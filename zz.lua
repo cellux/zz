@@ -798,14 +798,6 @@ function BuildContext:main_targets(name, bootstrap_code)
    return { main_o, main_lo }
 end
 
-function BuildContext:build_main(bootstrap_code)
-   local main_targets = self:main_targets('_main', bootstrap_code)
-   for _,t in ipairs(main_targets) do
-      t:force_make()
-   end
-   return main_targets
-end
-
 function BuildContext:gen_vfs_mount()
    local code = ''
    if next(self.pd.mounts) then
