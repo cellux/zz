@@ -376,10 +376,9 @@ local function Scheduler() -- scheduler constructor
                   if not ok then
                      local e = rv
                      if not util.is_error(e) then
-                        e = util.Error {
-                           message = e,
+                        e = util.Error(0, nil, e, {
                            traceback = debug.traceback(t, tostring(e), 1)
-                        }
+                        })
                      end
                      error(e, 0)
                   else

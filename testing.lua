@@ -47,7 +47,7 @@ function Test:is_nosched()
 end
 
 function Test:run(tc)
-   self.ok, self.err = pcall(self.testfn, tc)
+   self.ok, self.err = util.pcall(self.testfn, tc)
 end
 
 -- TestContext

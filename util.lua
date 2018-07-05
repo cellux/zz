@@ -297,42 +297,30 @@ end
 
 local Error = M.Class()
 
-function Error:create(opts)
-   opts.class = opts.class or 'runtime-error'
-   opts.message = tostring(opts.message or opts.class)
-   local level = (opts.level or 1) + 2 -- Error() + Error:create()
-   opts.info = debug.getinfo(level)
-   opts.__tostring = opts.__tostring or function(self) return self.message end
-   opts.traceback = opts.traceback or debug.traceback(opts.__tostring(opts), level)
-   return opts
+function Error:create(level, class, message, extra)
+   level = (level or 1) + 2 -- Error() + Error:create()
+   local self = extra or {}
+   self.class = class or "error"
+   self.message = tostring(message or "runtime error")
+   self.info = debug.getinfo(level)
+   self.__tostring = self.__tostring or function(self) return self.message end
+   self.traceback = self.traceback or debug.traceback(self.__tostring(self), level)
+   return self
 end
 
 M.Error = Error
 
-function M.is_error(err)
-   return type(err)=="table" and err.class and err.traceback
+function M.is_error(x)
+   return type(x)=="table" and x.class and x.message and x.info and x.traceback
 end
 
-function M.throw1at(level, opts)
+function M.throwat(level, ...)
    level = (level or 1) + 1
-   if type(opts) ~= "table" then
-      ef("throw1at: second arg (error object) must be a table")
-   end
-   opts.level = level
-   error(Error(opts), 0)
+   error(Error(level, ...), 0)
 end
 
-function M.throwat(level, class, message)
-   level = (level or 1) + 1
-   M.throw1at(level, { class = class, message = message })
-end
-
-function M.throw1(err)
-   M.throw1at(2, err)
-end
-
-function M.throw(class, message)
-   M.throw1at(2, { class = class, message = message })
+function M.throw(...)
+   M.throwat(2, ...)
 end
 
 function M.check_ok(funcname, okvalue, rv)
@@ -354,14 +342,26 @@ end
 function M.check_errno(funcname, rv)
    if rv == -1 then
       local _errno = errno.errno()
-      M.throw1at {
-         class = "libc-error",
-         message = sf("%s() failed: %s", funcname, errno.strerror(_errno)),
-         errno = _errno,
-      }
+      local message = sf("%s() failed: %s", funcname, errno.strerror(_errno))
+      M.throwat(2, "libc", message, { errno = _errno })
    else
       return rv
    end
+end
+
+function M.pcall(f, ...)
+   local args = {...}
+   local function trampoline()
+      return f(unpack(args))
+   end
+   local function error_handler(e)
+      if M.is_error(e) then
+         return e
+      else
+         return M.Error(2, nil, e)
+      end
+   end
+   return xpcall(trampoline, error_handler)
 end
 
 return M
