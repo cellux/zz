@@ -295,17 +295,31 @@ end
 
 -- error handling
 
-function M.throw1at(level, err)
+local Error = M.Class()
+
+function Error:create(opts)
+   opts.class = opts.class or 'runtime-error'
+   opts.message = tostring(opts.message or opts.class)
+   local level = (opts.level or 1) + 2 -- Error() + Error:create()
+   opts.info = debug.getinfo(level)
+   opts.__tostring = opts.__tostring or function(self) return self.message end
+   opts.traceback = opts.traceback or debug.traceback(opts.__tostring(opts), level)
+   return opts
+end
+
+M.Error = Error
+
+function M.is_error(err)
+   return type(err)=="table" and err.class and err.traceback
+end
+
+function M.throw1at(level, opts)
    level = (level or 1) + 1
-   if type(err) ~= "table" then
+   if type(opts) ~= "table" then
       ef("throw1at: second arg (error object) must be a table")
    end
-   err.class = err.class or "runtime-error"
-   err.message = err.message or tostring(err.class)
-   err.__tostring = err.__tostring or function(self) return self.message end
-   err = setmetatable(err, err) -- activate __tostring
-   err.traceback = debug.traceback(tostring(err), level)
-   error(err, 0)
+   opts.level = level
+   error(Error(opts), 0)
 end
 
 function M.throwat(level, class, message)
@@ -319,10 +333,6 @@ end
 
 function M.throw(class, message)
    M.throw1at(2, { class = class, message = message })
-end
-
-function M.is_error(err)
-   return type(err)=="table" and err.class and err.traceback
 end
 
 function M.check_ok(funcname, okvalue, rv)

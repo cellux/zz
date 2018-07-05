@@ -5,6 +5,7 @@ local process = require('process')
 local signal = require('signal')
 local assert = require('assert')
 local inspect = require('inspect')
+local util = require('util')
 
 testing:nosched("scheduler creation and release", function()
    for i=1,10 do
@@ -315,7 +316,16 @@ testing:nosched("errors thrown by scheduled threads contain a stack trace", func
       end)
    end)
    local err = assert.throws("not a respectable software company", sched)
-   assert.match("in function 'throw'", err)
+   assert(util.is_error(err))
+   assert.equals(err.class, 'runtime-error')
+   local test_path = debug.getinfo(1,"S").short_src
+   assert.match('^'..test_path..[[:\d+: not a respectable software company$]], err.message)
+   assert.match('^'..test_path..[[:\d+: not a respectable software company$]], tostring(err))
+   local traceback_pattern = '^'..test_path..[[:\d+: not a respectable software company
+stack traceback:
+	]]..test_path..[[:\d+: in function 'throw'
+	]]..test_path..[[:\d+: in function <]]..test_path..[[:\d+>]]
+   assert.match(traceback_pattern, err.traceback)
 end)
 
 testing:nosched("join", function()

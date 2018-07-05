@@ -4,6 +4,7 @@ local time = require('time')
 local nn = require('nanomsg')
 local msgpack = require('msgpack')
 local inspect = require('inspect')
+local util = require('util')
 
 local M = {}
 
@@ -373,7 +374,14 @@ local function Scheduler() -- scheduler constructor
                   end
                elseif status == "dead" then
                   if not ok then
-                     error(debug.traceback(t, rv), 0)
+                     local e = rv
+                     if not util.is_error(e) then
+                        e = util.Error {
+                           message = e,
+                           traceback = debug.traceback(t, tostring(e), 1)
+                        }
+                     end
+                     error(e, 0)
                   else
                      -- the coroutine finished its execution
                      if #exclusive_threads > 0 and exclusive_threads[1] == t then
