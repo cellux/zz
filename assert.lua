@@ -85,7 +85,10 @@ local function assert_match(pattern, value, err, level)
    assert_type(pattern, "string", "assert_match pattern", level)
    assert_type(value, "string", "assert_match value", level)
    local m = re.match(pattern, value)
-   assert_true(m ~= nil, err, level)
+   if m == nil then
+      err = err or sf("pattern '%s' does not match value:\n%s", pattern, value)
+      util.throwat(level, "assertion-error", err)
+   end
 end
 
 M.match = assert_match
