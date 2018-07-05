@@ -142,9 +142,10 @@ function TestSuite:run(tc)
             if util.is_error(err) then
                err = err.traceback
             end
-            io.stderr:write(sf("\nwhile testing '%s'\nin %s\n\n%s\n",
+            io.stderr:write(sf("\nwhile testing '%s'\nat %s:%d\n\n%s\n",
                                t.name,
-                               t.short_src, 
+                               t.err.info.short_src,
+                               t.err.info.currentline,
                                err))
          end
          self:walk(report_failure, function(t) return not t.ok end)
