@@ -301,24 +301,24 @@ function M.throw1at(level, err)
       ef("throw1at: second arg (error object) must be a table")
    end
    err.class = err.class or "runtime-error"
-   err.msg = err.msg or tostring(err.class)
-   err.__tostring = err.__tostring or function(self) return self.msg end
+   err.message = err.message or tostring(err.class)
+   err.__tostring = err.__tostring or function(self) return self.message end
    err = setmetatable(err, err) -- activate __tostring
    err.traceback = debug.traceback(tostring(err), level)
    error(err, 0)
 end
 
-function M.throwat(level, class, msg)
+function M.throwat(level, class, message)
    level = (level or 1) + 1
-   M.throw1at(level, { class = class, msg = msg })
+   M.throw1at(level, { class = class, message = message })
 end
 
 function M.throw1(err)
    M.throw1at(2, err)
 end
 
-function M.throw(class, msg)
-   M.throw1at(2, { class = class, msg = msg })
+function M.throw(class, message)
+   M.throw1at(2, { class = class, message = message })
 end
 
 function M.is_error(err)
@@ -346,7 +346,7 @@ function M.check_errno(funcname, rv)
       local _errno = errno.errno()
       M.throw1at {
          class = "libc-error",
-         msg = sf("%s() failed: %s", funcname, errno.strerror(_errno)),
+         message = sf("%s() failed: %s", funcname, errno.strerror(_errno)),
          errno = _errno,
       }
    else

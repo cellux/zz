@@ -102,6 +102,6 @@ function _G.pf(fmt, ...)
 end
 
 function _G.ef(fmt, ...)
-   local msg = string.format(fmt, ...)
-   util.throw1at(2, { msg = msg })
+   local message = string.format(fmt, ...)
+   util.throw1at(2, { message = message })
 end
