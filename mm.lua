@@ -132,4 +132,15 @@ function M.ret_block(ptr, block_size)
    block_pool:ret(ptr, block_size)
 end
 
+function M.with_block(size, ptr_type, f)
+   local ptr, block_size = M.get_block(size, ptr_type)
+   local ok, rv = util.pcall(f, ptr, block_size)
+   M.ret_block(ptr, block_size)
+   if ok then
+      return rv
+   else
+      error(rv, 0)
+   end
+end
+
 return M

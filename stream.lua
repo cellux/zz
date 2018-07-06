@@ -41,10 +41,10 @@ function BaseStream:read(n)
          buf = self.read_buffer
          self.read_buffer = buffer.new()
       else
-         local ptr, block_size = mm.get_block(READ_BLOCK_SIZE)
-         local nbytes = self:read1(ptr, block_size)
-         buf = buffer.copy(ptr, nbytes)
-         mm.ret_block(ptr, block_size)
+         mm.with_block(READ_BLOCK_SIZE, nil, function(ptr, block_size)
+            local nbytes = self:read1(ptr, block_size)
+            buf = buffer.copy(ptr, nbytes)
+         end)
       end
    elseif n > 0 then
       -- read exactly N bytes or until EOF
@@ -79,15 +79,15 @@ function BaseStream:read(n)
          nbytes_total = nbytes_total + #self.read_buffer
          self.read_buffer = buffer.new()
       end
-      local ptr, block_size = mm.get_block(READ_BLOCK_SIZE)
-      while not self:eof() do
-         local nbytes = self:read1(ptr, block_size)
-         if nbytes > 0 then
-            table.insert(buffers, buffer.copy(ptr, nbytes))
-            nbytes_total = nbytes_total + nbytes
+      mm.with_block(READ_BLOCK_SIZE, nil, function(ptr, block_size)
+         while not self:eof() do
+            local nbytes = self:read1(ptr, block_size)
+            if nbytes > 0 then
+               table.insert(buffers, buffer.copy(ptr, nbytes))
+               nbytes_total = nbytes_total + nbytes
+            end
          end
-      end
-      mm.ret_block(ptr, block_size)
+      end)
       buf = buffer.new(nbytes_total)
       for i=1,#buffers do
          buf:append(buffers[i])
@@ -209,12 +209,12 @@ function M.pipe(s1, s2, close_s2)
    s1 = make_stream(s1)
    s2 = make_stream(s2)
    return sched(function()
-      local ptr, block_size = mm.get_block(M.READ_BLOCK_SIZE)
-      while not s1:eof() do
-         local nbytes = s1:read1(ptr, block_size)
-         s2:write1(ptr, nbytes)
-      end
-      mm.ret_block(ptr, block_size)
+      mm.with_block(M.READ_BLOCK_SIZE, nil, function(ptr, block_size)
+         while not s1:eof() do
+            local nbytes = s1:read1(ptr, block_size)
+            s2:write1(ptr, nbytes)
+         end
+      end)
       s1:close()
       if close_s2 then
          s2:close()

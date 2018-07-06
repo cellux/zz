@@ -188,13 +188,13 @@ local File_mt = {}
 local function lseek(fd, offset, whence)
    local rv
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_lseek")
-      req.fd = fd
-      req.offset = offset
-      req.whence = whence
-      async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSEEK, req)
-      mm.ret_block(req, block_size)
-      return req.rv
+      return mm.with_block("struct zz_async_fs_lseek", nil, function(req, block_size)
+         req.fd = fd
+         req.offset = offset
+         req.whence = whence
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSEEK, req)
+         return req.rv
+      end)
    else
       rv = ffi.C.lseek(fd, offset, whence)
    end
@@ -215,13 +215,13 @@ end
 function File_mt:read1(ptr, size)
    local nbytes = 0
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_read_write")
-      req.fd = self.fd
-      req.buf = ptr
-      req.count = size
-      async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READ, req)
-      nbytes = req.nbytes
-      mm.ret_block(req, block_size)
+      mm.with_block("struct zz_async_fs_read_write", nil, function(req, block_size)
+         req.fd = self.fd
+         req.buf = ptr
+         req.count = size
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READ, req)
+         nbytes = req.nbytes
+      end)
    else
       nbytes = ffi.C.read(self.fd, ptr, size)
    end
@@ -231,13 +231,13 @@ end
 function File_mt:write1(ptr, size)
    local nbytes = 0
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_read_write")
-      req.fd = self.fd
-      req.buf = ptr
-      req.count = size
-      async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_WRITE, req)
-      mm.ret_block(req, block_size)
-      nbytes = req.nbytes
+      mm.with_block("struct zz_async_fs_read_write", nil, function(req, block_size)
+         req.fd = self.fd
+         req.buf = ptr
+         req.count = size
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_WRITE, req)
+         nbytes = req.nbytes
+      end)
    else
       nbytes = ffi.C.write(self.fd, ptr, size)
    end
@@ -258,11 +258,11 @@ function File_mt:close()
    if self.fd >= 0 then
       local rv
       if sched.ticking() then
-         local req, block_size = mm.get_block("struct zz_async_fs_close")
-         req.fd = self.fd
-         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSE, req)
-         rv = req.rv
-         mm.ret_block(req, block_size)
+         rv = mm.with_block("struct zz_async_fs_close", nil, function(req, block_size)
+            req.fd = self.fd
+            async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSE, req)
+            return req.rv
+         end)
       else
          rv = ffi.C.close(self.fd)
       end
@@ -376,12 +376,12 @@ local Stat_mt = {}
 
 function Stat_mt:stat(path)
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_stat")
-      req.path = ffi.cast("char*", path)
-      req.buf = self.buf
-      async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_STAT, req)
-      mm.ret_block(req, block_size)
-      return req.rv
+      return mm.with_block("struct zz_async_fs_stat", nil, function(req, block_size)
+         req.path = ffi.cast("char*", path)
+         req.buf = self.buf
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_STAT, req)
+         return req.rv
+      end)
    else
       return ffi.C.zz_fs_stat(path, self.buf)
    end
@@ -389,12 +389,12 @@ end
 
 function Stat_mt:lstat(path)
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_fs_stat")
-      req.path = ffi.cast("char*", path)
-      req.buf = self.buf
-      async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSTAT, req)
-      mm.ret_block(req, block_size)
-      return req.rv
+      return mm.with_block("struct zz_async_fs_stat", nil, function(req, block_size)
+         req.path = ffi.cast("char*", path)
+         req.buf = self.buf
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSTAT, req)
+         return req.rv
+      end)
    else
       return ffi.C.zz_fs_lstat(path, self.buf)
    end
@@ -590,14 +590,13 @@ function M.symlink(oldname, newname)
 end
 
 function M.readlink(filename)
-   local buf, block_size = mm.get_block(PATH_MAX)
-   local size = ffi.C.readlink(filename, buf, PATH_MAX)
-   if size == PATH_MAX then
-      ef("readlink: buffer overflow for filename: %s", filename)
-   end
-   local rv = ffi.string(buf, size)
-   mm.ret_block(buf, block_size)
-   return rv
+   return mm.with_block(PATH_MAX, nil, function(buf, block_size)
+      local size = ffi.C.readlink(filename, buf, PATH_MAX)
+      if size == PATH_MAX then
+         ef("readlink: buffer overflow for filename: %s", filename)
+      end
+      return ffi.string(buf, size)
+   end)
 end
 
 function M.realpath(name)
@@ -613,20 +612,18 @@ end
 
 function M.basename(path)
    -- may modify its argument, so let's make a copy
-   local path_copy, block_size = mm.get_block(#path+1)
-   ffi.copy(path_copy, path)
-   local rv = ffi.string(ffi.C.basename(path_copy))
-   mm.ret_block(path_copy, block_size)
-   return rv
+   return mm.with_block(#path+1, nil, function(path_copy, block_size)
+      ffi.copy(path_copy, path)
+      return ffi.string(ffi.C.basename(path_copy))
+   end)
 end
 
 function M.dirname(path)
    -- may modify its argument, so let's make a copy
-   local path_copy, block_size = mm.get_block(#path+1)
-   ffi.copy(path_copy, path)
-   local rv = ffi.string(ffi.C.dirname(path_copy))
-   mm.ret_block(path_copy, block_size)
-   return rv
+   return mm.with_block(#path+1, nil, function(path_copy, block_size)
+      ffi.copy(path_copy, path)
+      return ffi.string(ffi.C.dirname(path_copy))
+   end)
 end
 
 local function join(path, ...)
@@ -645,37 +642,36 @@ M.join = join
 local Path_mt = {}
 
 function Path_mt:__tostring()
-   local buf, block_size = mm.get_block(PATH_MAX, "char*")
-   local offset = 0
-   local idx = 1
-   -- the first component of an absolute path is /
-   if self.components[1] == "/" then
-      buf[0] = 0x2f -- slash
-      offset = 1
-      idx = 2
-   end
-   -- append components one by one to buf
-   while idx <= #self.components do
-      local name = self.components[idx]
-      local len = #name
-      if offset+len > block_size then
-         ef("path too long")
+   return mm.with_block(PATH_MAX, "char*", function(buf, block_size)
+      local offset = 0
+      local idx = 1
+      -- the first component of an absolute path is /
+      if self.components[1] == "/" then
+         buf[0] = 0x2f -- slash
+         offset = 1
+         idx = 2
       end
-      ffi.copy(buf+offset, name, len)
-      offset = offset + len
-      -- append a slash after every component except the last
-      if idx < #self.components then
-         if offset == block_size then
+      -- append components one by one to buf
+      while idx <= #self.components do
+         local name = self.components[idx]
+         local len = #name
+         if offset+len > block_size then
             ef("path too long")
          end
-         buf[offset] = 0x2f -- slash
-         offset = offset + 1
+         ffi.copy(buf+offset, name, len)
+         offset = offset + len
+         -- append a slash after every component except the last
+         if idx < #self.components then
+            if offset == block_size then
+               ef("path too long")
+            end
+            buf[offset] = 0x2f -- slash
+            offset = offset + 1
+         end
+         idx = idx + 1
       end
-      idx = idx + 1
-   end
-   local path = ffi.string(buf, offset)
-   mm.ret_block(buf, block_size)
-   return path
+      return ffi.string(buf, offset)
+   end)
 end
 
 local function parse_path(path)
@@ -760,19 +756,20 @@ function M.glob(pattern, flags)
                    ffi.C.GLOB_ERR,
                    ffi.C.GLOB_BRACE,
                    ffi.C.GLOB_TILDE_CHECK)
-   local pglob, block_size = mm.get_block("glob_t")
-   local status = ffi.C.glob(pattern, flags, nil, pglob)
-   local rv = {}
-   if status == 0 then
-      for i=1,tonumber(pglob.gl_pathc) do
-         table.insert(rv, ffi.string(pglob.gl_pathv[i-1]))
+   return mm.with_block("glob_t", nil, function(pglob, block_size)
+      local status = ffi.C.glob(pattern, flags, nil, pglob)
+      local rv = {}
+      if status == 0 then
+         for i=1,tonumber(pglob.gl_pathc) do
+            table.insert(rv, ffi.string(pglob.gl_pathv[i-1]))
+         end
       end
-   elseif status ~= ffi.C.GLOB_NOMATCH then
-      ef("glob failed")
-   end
-   ffi.C.globfree(pglob)
-   mm.ret_block(pglob, block_size)
-   return rv
+      ffi.C.globfree(pglob)
+      if status ~= 0 and status ~= ffi.C.GLOB_NOMATCH then
+         ef("glob failed")
+      end
+      return rv
+   end)
 end
 
 return setmetatable(M, { __index = ffi.C })

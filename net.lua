@@ -219,14 +219,14 @@ function sockaddr_mt:__index(k)
          return rv
       elseif self.af == ffi.C.AF_INET then
          local bufsize = 128
-         local buf, block_size = mm.get_block(bufsize)
-         util.check_bad("inet_ntop", nil,
-                        ffi.C.inet_ntop(self.af,
-                                        ffi.cast("const void *", self.addr.sin_addr),
-                                        buf, bufsize))
-         local rv = ffi.string(buf)
-         mm.ret_block(buf, block_size)
-         return rv
+         return mm.with_block(bufsize, nil, function(buf)
+            util.check_bad(
+               "inet_ntop", nil,
+               ffi.C.inet_ntop(self.af,
+                               ffi.cast("const void *", self.addr.sin_addr),
+                               buf, bufsize))
+            return ffi.string(buf)
+         end)
       else
          error("Unsupported address family")
       end
@@ -399,10 +399,11 @@ end
 
 function Socket_mt:recv(size)
    size = size or 4096
-   local ptr, block_size = mm.get_block(size)
-   local nbytes, peer_addr = self:recvfrom(ptr, size)
-   local buf = buffer.copy(ptr, nbytes)
-   mm.ret_block(ptr, block_size)
+   local buf, nbytes, peer_addr
+   mm.with_block(size, nil, function(ptr, block_size)
+      nbytes, peer_addr = self:recvfrom(ptr, size)
+      buf = buffer.copy(ptr, nbytes)
+   end)
    return buf, peer_addr
 end
 

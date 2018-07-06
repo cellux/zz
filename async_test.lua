@@ -10,14 +10,14 @@ local ASYNC = async.register_worker(ffi.C.zz_async_handlers)
 
 local function make_async_echo_requester(delay, payload, acc)
    return function()
-      local request, block_size = mm.get_block("struct zz_async_echo")
-      request.delay = delay
-      request.payload = payload
-      -- zz_async_echo_worker takes a delay and
-      -- returns .payload in .response after delay seconds
-      async.request(ASYNC, ffi.C.ZZ_ASYNC_ECHO, request)
-      table.insert(acc, request.response)
-      mm.ret_block(request, block_size)
+      mm.with_block("struct zz_async_echo", nil, function(request, block_size)
+         request.delay = delay
+         request.payload = payload
+         -- zz_async_echo_worker takes a delay and
+         -- returns .payload in .response after delay seconds
+         async.request(ASYNC, ffi.C.ZZ_ASYNC_ECHO, request)
+         table.insert(acc, request.response)
+      end)
    end
 end
 

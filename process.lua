@@ -134,19 +134,20 @@ end
 
 function M.waitpid(pid, options)
    options = options or 0
+   local rv, status
    if sched.ticking() then
-      local req, block_size = mm.get_block("struct zz_async_process_waitpid")
-      req.pid = pid
-      req.options = options
-      async.request(ASYNC_PROCESS, ffi.C.ZZ_ASYNC_PROCESS_WAITPID, req)
-      util.check_errno("waitpid", req.rv)
-      mm.ret_block(req, block_size)
-      return req.rv, extract_status(req.status)
+      mm.with_block("struct zz_async_process_waitpid", nil, function(req, block_size)
+         req.pid = pid
+         req.options = options
+         async.request(ASYNC_PROCESS, ffi.C.ZZ_ASYNC_PROCESS_WAITPID, req)
+         rv, status = req.rv, req.status
+      end)
    else
-      local status = ffi.new("int[1]")
-      local rv = util.check_errno("waitpid", ffi.C.waitpid(pid, status, options))
-      return rv, extract_status(status[0])
+      local _status = ffi.new("int[1]")
+      rv = ffi.C.waitpid(pid, _status, options)
+      status = _status[0]
    end
+   return util.check_errno("waitpid", rv), extract_status(status)
 end
 
 function M.create(opts)
