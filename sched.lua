@@ -565,6 +565,9 @@ local function Scheduler() -- scheduler constructor
          return OFF
       end
       for _,t in ipairs(threadlist) do
+         if type(t) ~= "thread" then
+            ef("self.join() called with non-thread arg")
+         end
          if coroutine.status(t) ~= "dead" then
             self.on(t, thread_is_dead)
          else

@@ -205,7 +205,7 @@ local function make_stream(x)
    return x and util.chainlast(s, x) or s
 end
 
-function M.pipe(s1, s2, close_s2)
+function M.copy(s1, s2, cb)
    s1 = make_stream(s1)
    s2 = make_stream(s2)
    return sched(function()
@@ -216,14 +216,16 @@ function M.pipe(s1, s2, close_s2)
          end
       end)
       s1:close()
-      if close_s2 then
-         s2:close()
+      if cb then
+         cb()
       end
    end)
 end
 
-function M.pipe_close(s1, s2)
-   return M.pipe(s1, s2, true)
+function M.pipe(s1, s2)
+   s1 = make_stream(s1)
+   s2 = make_stream(s2)
+   return M.copy(s1, s2, function() s2:close() end)
 end
 
 local M_mt = {}

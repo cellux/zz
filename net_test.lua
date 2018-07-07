@@ -52,7 +52,7 @@ testing("socket read/write using streams", function()
    local f = fs.open("testdata/arborescence.jpg")
    local buf = buffer.new()
    sched.join {
-      stream.pipe_close(f, s1),
+      stream.pipe(f, s1),
       stream.pipe(s2, buf),
    }
    assert.equals(util.hexstr(digest.md5(buf)), '58823f6d5e1d154d37d9aa2dbaf27371')
