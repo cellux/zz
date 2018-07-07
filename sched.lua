@@ -92,23 +92,57 @@ M.time = get_current_time
 -- less than sched.precision
 M.precision = 0.005 -- seconds
 
+M.permanent_event_id_pool_size = 1048576
+
+local function EventIdGenerator()
+   -- permanent event ids are allocated at the beginning of the range
+   local first_event_id = M.permanent_event_id_pool_size + 1
+   local last_event_id = 2^31
+
+   local next_permanent_event_id = 1
+   local next_event_id = first_event_id
+
+   return function(permanent)
+      local event_id
+      if permanent then
+         event_id = next_permanent_event_id
+         if next_permanent_event_id == first_event_id then
+            ef("permanent event id overflow, pool size: %d", M.permanent_event_id_pool_size)
+         else
+            next_permanent_event_id = next_permanent_event_id + 1
+         end
+      else
+         event_id = next_event_id
+         if next_event_id == last_event_id then
+            -- we can just hope that this is ok
+            next_event_id = first_event_id
+         else
+            next_event_id = next_event_id + 1
+         end
+      end
+      -- why the returned event ids are negative:
+      --
+      -- when a thread yields a number, it may be either positive (an
+      -- absolute point in time when the thread should be woken up) or
+      -- negative (an event id to wait for)
+      return -event_id
+   end
+end
+
 local function Scheduler() -- scheduler constructor
    local self = {}
 
    -- threads may allocate event_ids and wait for them. when the event
    -- loop gets an event with a particular id, it wakes up the thread
    -- which is waiting for it
-   local next_event_id = -1
-
-   function self.make_event_id()
-      local rv = next_event_id
-      next_event_id = next_event_id - 1
-      -- TODO: find a way to ensure that this doesn't underflow
-      if next_event_id < -(2^31) then
-         error("event id underflow")
-      end
-      return rv
-   end
+   --
+   -- make_event_id() generates a one-shot event id: these are
+   -- typically used to wait for a single event and then never used
+   -- again (thus they can be recycled)
+   --
+   -- make_event_id(true) generates a permanent event id: these are
+   -- guaranteed to be unique (they will never be returned again)
+   self.make_event_id = EventIdGenerator()
 
    local poller = M.poller_factory()
 
@@ -118,7 +152,7 @@ local function Scheduler() -- scheduler constructor
 
    function self.poller_add(fd, events)
       assert(registered_fds[fd]==nil)
-      local event_id = self.make_event_id()
+      local event_id = self.make_event_id(true)
       poller:add(fd, events, event_id)
       registered_fds[fd] = event_id
    end
@@ -136,26 +170,26 @@ local function Scheduler() -- scheduler constructor
       return poller:fd()
    end
 
-   -- suspend the calling thread until there is an event on `fd` which
-   -- matches `events`
+   -- suspend the calling thread until there is
+   -- an event on `fd` matching `events`
    function self.poll(fd, events)
       assert(type(events)=="string")
-      local rcvd_events
+      local received_events
       local event_id = registered_fds[fd]
       if event_id then
          repeat
-            rcvd_events = self.wait(event_id)
-         until poller:match_events(events, rcvd_events)
+            received_events = self.wait(event_id)
+         until poller:match_events(events, received_events)
       else
          events = events.."1" -- one shot
          event_id = self.make_event_id()
          -- the event_id lets us differentiate between threads which
          -- are all polling the same file descriptor
          poller:add(fd, events, event_id)
-         rcvd_events = self.wait(event_id)
+         received_events = self.wait(event_id)
          poller:del(fd, events, event_id)
       end
-      return rcvd_events
+      return received_events
    end
 
    local module_registry = ModuleRegistry(self)
@@ -169,10 +203,11 @@ local function Scheduler() -- scheduler constructor
    end
 
    -- if a thread is scheduled as exclusive, no other runnables will
-   -- be resumed until it finishes
+   -- be resumed until it finishes execution
    local exclusive_threads = {}
 
    -- sleeping threads are waiting for their time to come
+   --
    -- the list is ordered by wake-up time
    local sleeping = adt.OrderedList(function(st) return st.time end)
 
@@ -185,6 +220,7 @@ local function Scheduler() -- scheduler constructor
    --
    -- key: evtype, value: array of runnables
    --
+   -- evtype can be an event id, a string (e.g. 'quit'), a thread or any other object
    -- a runnable can be a thread, a background thread or a function
    local waiting = {}
    local n_waiting_threads = 0
@@ -223,7 +259,7 @@ local function Scheduler() -- scheduler constructor
    --
    -- 1. collects events and pushes them to the event queue
    -- 2. processes all events in the event queue
-   -- 3. gives all active threads a chance to run (resume)
+   -- 3. gives all runnable threads a chance to run (resume)
    local event_queue = adt.List()
 
    -- event_sub: the socket we receive events from
@@ -234,12 +270,14 @@ local function Scheduler() -- scheduler constructor
 
    -- setup permanent polling for event_sub
    local event_sub_fd = nn.getsockopt(event_sub, 0, nn.RCVFD)
-   local event_sub_id = self.make_event_id()
+   local event_sub_id = self.make_event_id(true)
    poller:add(event_sub_fd, "r", event_sub_id)
 
    -- tick: one iteration of the event loop
    local function tick() 
       local now = get_current_time()
+
+      -- let threads know the time when the current tick started
       self.now = now
 
       local function wakeup_sleepers(now)
@@ -255,7 +293,7 @@ local function Scheduler() -- scheduler constructor
       -- let all registered scheduler modules do their `tick`
       module_registry:invoke('tick')
 
-      local function handle_poll_event(events, userdata)
+      local function handle_poll_event(received_events, userdata)
          if userdata == event_sub_id then
             local event = nn.recv(event_sub)
             local unpacked = msgpack.unpack(event)
@@ -263,8 +301,8 @@ local function Scheduler() -- scheduler constructor
             assert(#unpacked == 2, "event shall be a table of two elements, but it is "..inspect(unpacked))
             event_queue:push(unpacked)
          else
-            -- evtype: userdata, evdata: events
-            event_queue:push({userdata, events})
+            -- evtype: userdata, evdata: received_events
+            event_queue:push({userdata, received_events})
          end
       end
 
@@ -376,6 +414,7 @@ local function Scheduler() -- scheduler constructor
                   if not ok then
                      local e = rv
                      if not util.is_error(e) then
+                        -- convert to an error object with the correct traceback
                         e = util.Error(0, nil, e, {
                            traceback = debug.traceback(t, tostring(e), 1)
                         })
@@ -429,10 +468,8 @@ local function Scheduler() -- scheduler constructor
       if type(x)=="function" then
          return x
       elseif getmetatable(x).__call then
-         -- it's a callable object
-         local callable = x
          return function(...)
-            callable(...)
+            x(...)
          end
       else
          ef("expected a callable, got: %s", x)
