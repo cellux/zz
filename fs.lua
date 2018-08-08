@@ -179,8 +179,6 @@ struct zz_async_fs_stat {
 
 local PATH_MAX = 4096 -- as defined in /usr/include/linux/limits.h
 
-local M = {}
-
 local ASYNC_FS  = async.register_worker(ffi.C.zz_async_fs_handlers)
 
 local File_mt = {}
@@ -213,7 +211,7 @@ function File_mt:size()
 end
 
 function File_mt:read1(ptr, size)
-   local nbytes = 0
+   local nbytes
    if sched.ticking() then
       mm.with_block("struct zz_async_fs_read_write", nil, function(req, block_size)
          req.fd = self.fd
@@ -229,7 +227,7 @@ function File_mt:read1(ptr, size)
 end
 
 function File_mt:write1(ptr, size)
-   local nbytes = 0
+   local nbytes
    if sched.ticking() then
       mm.with_block("struct zz_async_fs_read_write", nil, function(req, block_size)
          req.fd = self.fd
@@ -266,10 +264,9 @@ function File_mt:close()
       else
          rv = ffi.C.close(self.fd)
       end
-      util.check_ok("close", 0, rv)
+      util.check_errno("close", rv)
       self.fd = -1
    end
-   return 0
 end
 
 function File_mt:stream_impl(stream)
@@ -299,10 +296,12 @@ File_mt.__gc = File_mt.close
 
 local File = ffi.metatype("struct zz_fs_File_ct", File_mt)
 
+local M = {}
+
 function M.open(path, flags, mode)
-   local fd = ffi.C.open(path,
-                         flags or ffi.C.O_RDONLY,
-                         mode or util.oct("666"))
+   flags = flags or ffi.C.O_RDONLY
+   mode = mode or util.oct("666")
+   local fd = ffi.C.open(path, flags, mode)
    if fd == -1 then
       error(sf("open(%s) failed: %s", path, errno.strerror()), 2)
    else
@@ -318,9 +317,10 @@ function M.readfile(path, rsize)
 end
 
 function M.writefile(path, contents)
-   local f = M.open(path, bit.bor(ffi.C.O_CREAT,
-                                  ffi.C.O_WRONLY,
-                                  ffi.C.O_TRUNC))
+   local flags = bit.bor(ffi.C.O_CREAT,
+                         ffi.C.O_WRONLY,
+                         ffi.C.O_TRUNC)
+   local f = M.open(path, flags)
    stream(f):write(contents)
    f:close()
 end

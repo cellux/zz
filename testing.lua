@@ -89,10 +89,6 @@ function TestSuite:add(name, testfn, opts)
    else
       local t = Test(name, testfn, opts)
       t.parent = self
-      local info = debug.getinfo(testfn, 'S')
-      t.source = info.source
-      t.short_src = info.short_src
-      t.linedefined = info.linedefined
       table.insert(self.tests, t)
       return t
    end

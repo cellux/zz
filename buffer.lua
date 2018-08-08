@@ -22,6 +22,7 @@ local is_buffer
 local Buffer_mt = {}
 
 function Buffer_mt:__len()
+   -- tonumber() is needed because self.len may be int64_t
    return tonumber(self.len)
 end
 

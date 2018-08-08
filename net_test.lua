@@ -55,6 +55,7 @@ testing("socket read/write using streams", function()
       stream.pipe(f, s1),
       stream.pipe(s2, buf),
    }
+   -- stream.pipe() takes care of closing both ends
    assert.equals(util.hexstr(digest.md5(buf)), '58823f6d5e1d154d37d9aa2dbaf27371')
 end)
 
@@ -363,7 +364,7 @@ testing("getsockname() on UDP socket connected to broadcast address", function(t
    local broadcast_addr = net.sockaddr(net.AF_INET, "255.255.255.255", 54321 + t:nextid())
    s:connect(broadcast_addr)
    assert.type(s:getsockname().port, "number")
-   assert(string.match(s:getsockname().address, '^%d+%.%d+%.%d+%.%d+$'))
+   assert.match([[^\d+\.\d+\.\d+\.\d+$]], s:getsockname().address)
    s:close()
 end)
 

@@ -132,18 +132,15 @@ end
 
 function Poller_mt:close()
    if self.epfd >= 0 then
-      local rv
-      rv = ffi.C.close(self.epfd)
-      util.check_ok("close", 0, rv)
+      util.check_errno("close", ffi.C.close(self.epfd))
       self.epfd = -1
    end
-   return 0
 end
 
 Poller_mt.__index = Poller_mt
 
 local function Poller(epfd, max_events)
-   max_events = max_events or 64
+   max_events = max_events or 256
    local self = {
       epfd = epfd,
       max_events = max_events,

@@ -40,13 +40,17 @@ local M = {}
 
 local MAX_ACTIVE_THREADS = 16
 
-local thread_pool   = {} -- a list of reservable threads
+-- pool of free (reservable) worker threads
+local thread_pool = {}
 
-local reserve_queue = adt.List() -- reservation ids of coroutines
-                                 -- waiting for a reservable thread
+-- reservation ids of coroutines waiting for a worker thread
+local reserve_queue = adt.List()
 
-local n_active_threads   = 0
+-- number of worker threads (free + active)
 local n_worker_threads   = 0
+
+-- number of worker threads currently servicing a request
+local n_active_threads   = 0
 
 local function create_worker_thread()
    n_worker_threads = n_worker_threads + 1
@@ -108,7 +112,7 @@ end
 local function release_thread(t)
    n_active_threads = n_active_threads - 1
    if reserve_queue:empty() then
-      -- nobody is waiting for a thread, put it back to the pool
+      -- nobody is waiting for a thread, put it back into the pool
       table.insert(thread_pool, t)
    else
       local reservation_id = reserve_queue:shift()

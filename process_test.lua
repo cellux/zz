@@ -65,6 +65,7 @@ testing:nosched("fork(child_fn)", function()
    assert.equals(process.waitpid(pid), pid)
 end)
 
+-- following the fork immediately by exec is ok
 testing("execvp", function()
    local pid, sp = process.fork(function(sc)
       -- redirect command's stdout to parent through socket

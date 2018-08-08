@@ -289,8 +289,7 @@ local Socket_mt = {}
 local function Socket(fd, domain)
    local self = {
       fd = fd,
-      domain = domain,
-      readbuf = ""
+      domain = domain
    }
    return setmetatable(self, Socket_mt)
 end
@@ -359,7 +358,7 @@ function Socket_mt:connect(sockaddr)
          ef("connect() failed: %s", errno.strerror(e))
       end
    else
-      return 0
+      return rv -- 0
    end
 end
 
@@ -382,8 +381,7 @@ function Socket_mt:sendto(data, addr)
    if sched.ticking() then
       sched.poll(self.fd, "w")
    end
-   local rv = util.check_errno("sendto", ffi.C.sendto(self.fd, buf.ptr, #buf, 0, ffi.cast("const struct sockaddr *", addr.addr), addr.addr_size))
-   return rv
+   return util.check_errno("sendto", ffi.C.sendto(self.fd, buf.ptr, #buf, 0, ffi.cast("const struct sockaddr *", addr.addr), addr.addr_size))
 end
 
 function Socket_mt:recvfrom(ptr, size)
@@ -454,8 +452,7 @@ Socket_mt.__newindex = function(self, k, v)
                                         optval,
                                         ffi.sizeof("int")))
    elseif k == "O_NONBLOCK" then
-      local flags = util.check_errno("fcntl",
-                                     ffi.C.fcntl(self.fd, ffi.C.F_GETFL))
+      local flags = util.check_errno("fcntl", ffi.C.fcntl(self.fd, ffi.C.F_GETFL))
       if v then
          flags = bit.bor(flags, ffi.C[k])
       else
