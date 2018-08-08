@@ -188,7 +188,7 @@ local File_mt = {}
 local function lseek(fd, offset, whence)
    local rv
    if sched.ticking() then
-      return mm.with_block("struct zz_async_fs_lseek", nil, function(req, block_size)
+      rv = mm.with_block("struct zz_async_fs_lseek", nil, function(req, block_size)
          req.fd = fd
          req.offset = offset
          req.whence = whence

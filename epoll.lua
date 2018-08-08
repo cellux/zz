@@ -2,6 +2,7 @@ local ffi = require('ffi')
 local bit = require('bit')
 local util = require('util')
 local errno = require('errno')
+local mm = require('mm')
 
 ffi.cdef [[
 enum EPOLL_EVENTS {
@@ -82,10 +83,11 @@ function Poller_mt:match_events(mask, events)
 end
 
 function Poller_mt:ctl(op, fd, events, userdata)
-   local epoll_event = ffi.new("struct epoll_event")
-   epoll_event.events = events and parse_events(events) or 0
-   epoll_event.data.fd = userdata or 0
-   return util.check_errno("epoll_ctl", ffi.C.epoll_ctl(self.epfd, op, fd, epoll_event))
+   return mm.with_block("struct epoll_event", nil, function(ev)
+      ev.events = events and parse_events(events) or 0
+      ev.data.fd = userdata or 0
+      return util.check_errno("epoll_ctl", ffi.C.epoll_ctl(self.epfd, op, fd, ev))
+   end)
 end
 
 function Poller_mt:add(fd, events, userdata)

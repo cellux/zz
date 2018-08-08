@@ -153,10 +153,12 @@ end
 
 function M.strerror(errnum)
    errnum = errnum or M.errno()
+   local mm = require('mm')
    local buflen = 1024
-   local buf = ffi.new("char[?]", buflen)
-   local s = ffi.C.strerror_r(errnum, buf, buflen)
-   return ffi.string(s)
+   return mm.with_block(buflen, "char*", function(buf)
+      local s = ffi.C.strerror_r(errnum, buf, buflen)
+      return ffi.string(s)
+   end)
 end
 
 return M
