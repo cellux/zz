@@ -26,7 +26,7 @@ local function log(msg, ...)
 end
 
 local function die(msg, ...)
-   pf("ERROR: %s", sf(msg, ...))
+   pf("ERROR: %s", sf(tostring(msg), ...))
    process.exit(1)
 end
 
