@@ -12,6 +12,8 @@ local function assert_true(x, err, level)
    end
 end
 
+M.is_true = assert_true
+
 local function assert_false(x, err, level)
    level = (level or 1) + 1
    assert_true(x == false, err, level)
