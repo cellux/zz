@@ -104,7 +104,7 @@ function Buffer_mt:stream_impl(stream)
    function stream:close()
    end
    function stream:eof()
-      return read_offset == #buf
+      return read_offset == #buf and #stream.read_buffer == 0
    end
    function stream:read1(ptr, size)
       local nbytes = math.min(#buf - read_offset, size)

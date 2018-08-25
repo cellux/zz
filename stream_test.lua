@@ -1,5 +1,6 @@
 local testing = require('testing')('stream')
 local stream = require('stream')
+local buffer = require('buffer')
 local assert = require('assert')
 
 testing("memory streams (fifos)", function()
@@ -29,4 +30,11 @@ testing("memory streams (fifos)", function()
    -- writeln works with numbers
    s:writeln(1234)
    assert.equals(s:readln(), "1234")
+end)
+
+testing("read_until", function()
+   local buf = buffer.copy("\"This is not too good\", he said.")
+   local s = stream(buf)
+   assert.equals(s:read_until('"'), "")
+   assert.equals(s:read_until('"'), "This is not too good")
 end)
