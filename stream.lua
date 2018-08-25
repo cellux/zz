@@ -118,12 +118,12 @@ function BaseStream:read_until(marker)
             assert(#self.read_buffer == 0)
             self.read_buffer = buffer.slice(buf, next_offset)
          end
-         return buffer.copy(buf, marker_offset)
+         return buffer.copy(buf, marker_offset), true
       else
          start_search_at = start_search_at + search_len - #marker + 1
       end
    end
-   return buf
+   return buf, false
 end
 
 function BaseStream:readln(eol)
