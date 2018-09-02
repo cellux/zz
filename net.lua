@@ -420,14 +420,15 @@ function Socket_mt:close()
    return rv
 end
 
-function Socket_mt:stream_impl(stream)
+function Socket_mt:stream_impl()
+   local stream = {}
    local sock = self
    local eof = false
    function stream:close()
       return sock:close()
    end
    function stream:eof()
-      return eof and #stream.read_buffer == 0
+      return eof
    end
    function stream:read1(ptr, size)
       local nbytes = sock:read1(ptr, size)

@@ -2,6 +2,11 @@ local testing = require('testing')('stream')
 local stream = require('stream')
 local buffer = require('buffer')
 local assert = require('assert')
+local fs = require('fs')
+local net = require('net')
+local util = require('util')
+local digest = require('digest')
+local sched = require('sched')
 
 testing("memory streams (fifos)", function()
    local s = stream()
@@ -51,4 +56,78 @@ testing("read_until", function()
    local part, found_marker = s:read_until('"')
    assert.equals(part, "")
    assert.is_false(found_marker)
+end)
+
+testing("read_until keeping marker", function()
+   local buf = buffer.copy("\"This is not too good\", he said.")
+   local s = stream(buf)
+   assert.equals(s:read_until(',', true), '"This is not too good",')
+   assert.equals(s:read_until(',', true), ' he said.')
+end)
+
+local function stream_between(input, output)
+   input = stream(input)
+   output = stream(output)
+   local bufsize = 512
+   local buf = buffer.new(bufsize)
+   local readers = {
+      function()
+         local bytes_to_read = math.random(bufsize)
+         local bytes_actually_read = input:read1(buf.ptr, bytes_to_read)
+         return buffer.wrap(buf, bytes_actually_read)
+      end,
+      function()
+         return input:read()
+      end,
+      function()
+         return input:read(math.random(bufsize))
+      end,
+      function()
+         return input:read_until("\0", true)
+      end
+   }
+   while not input:eof() do
+      local piece_of_data = readers[math.random(#readers)]()
+      output:write(piece_of_data)
+   end
+   buf:free() -- we could also leave it to the GC
+end
+
+testing("file", function()
+   local input = fs.open("testdata/arborescence.jpg")
+   local output = buffer.new()
+   stream_between(input, output)
+   assert.equals(util.hexstr(digest.md5(output)), '58823f6d5e1d154d37d9aa2dbaf27371')
+   input:close()
+end)
+
+testing("buffer", function()
+   local input = fs.readfile("testdata/arborescence.jpg")
+   output = buffer.new()
+   stream_between(input, output)
+   assert.equals(util.hexstr(digest.md5(output)), '58823f6d5e1d154d37d9aa2dbaf27371')
+end)
+
+testing("socketpair", function()
+   local input = fs.open("testdata/arborescence.jpg")
+   local s1,s2 = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM)
+   local output = buffer.new()
+   sched(function()
+      stream_between(input, s1)
+      s1:close()
+   end)
+   stream_between(s2, output)
+   s2:close()
+   input:close()
+   assert.equals(util.hexstr(digest.md5(output)), '58823f6d5e1d154d37d9aa2dbaf27371')
+end)
+
+testing("memory stream", function()
+   local input = fs.open("testdata/arborescence.jpg")
+   local memory_stream = stream()
+   stream_between(input, memory_stream)
+   input:close()
+   local output = buffer.new()
+   stream_between(memory_stream, output)
+   assert.equals(util.hexstr(digest.md5(output)), '58823f6d5e1d154d37d9aa2dbaf27371')
 end)

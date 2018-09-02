@@ -164,6 +164,8 @@ function M.create(opts)
       opts.command = { "/bin/sh", "-c", opts.command }
    end
 
+   -- opts.command[1] is the command
+   -- opts.command[2..n] are the arguments
    assert(opts.command and type(opts.command) == "table")
 
    local function is_channel(x)
@@ -192,8 +194,8 @@ function M.create(opts)
          return self.sp
       end
 
-      function self:stream_impl(stream)
-         return self:socket():stream_impl(stream)
+      function self:stream_impl()
+         return self:socket():stream_impl()
       end
 
       local function create_writer(input)

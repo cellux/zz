@@ -98,13 +98,14 @@ function Buffer_mt:clear()
    ffi.fill(self.ptr, tonumber(self.len), 0)
 end
 
-function Buffer_mt:stream_impl(stream)
+function Buffer_mt:stream_impl()
+   local stream = {}
    local buf = self
    local read_offset = 0
    function stream:close()
    end
    function stream:eof()
-      return read_offset == #buf and #stream.read_buffer == 0
+      return read_offset == #buf
    end
    function stream:read1(ptr, size)
       local nbytes = math.min(#buf - read_offset, size)

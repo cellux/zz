@@ -8,31 +8,58 @@ local M = {}
 
 M.READ_BLOCK_SIZE = 4096
 
-local BaseStream = util.Class()
+local Stream = util.Class()
 
-function BaseStream:create()
+function Stream:create(obj)
+   local impl
+   if type(obj.stream_impl) == "function" then
+      impl = obj:stream_impl()
+   else
+      impl = obj
+   end
    return {
-      read_buffer = buffer.new()
+      is_stream = true,
+      impl = impl,
+      read_buffer = buffer.new(),
    }
 end
 
-function BaseStream:close()
-   ef("to be implemented")
+function Stream:close()
+   return self.impl:close()
 end
 
-function BaseStream:eof()
-   ef("to be implemented")
+function Stream:eof()
+   return #self.read_buffer == 0 and self.impl:eof()
 end
 
-function BaseStream:read1(ptr, size)
-   ef("to be implemented")
+function Stream:read1(ptr, size)
+   local bytes_read = 0
+   local bytes_left = size
+   local dst = ffi.cast("uint8_t*", ptr)
+   if #self.read_buffer > 0 then
+      if #self.read_buffer > size then
+         ffi.copy(dst, self.read_buffer.ptr, size)
+         self.read_buffer = buffer.slice(self.read_buffer, size)
+         bytes_read = size
+         bytes_left = 0
+      else
+         ffi.copy(dst, self.read_buffer.ptr, #self.read_buffer)
+         bytes_read = #self.read_buffer
+         bytes_left = size - bytes_read
+         self.read_buffer.len = 0
+      end
+   end
+   if bytes_left > 0 then
+      bytes_read = bytes_read + self.impl:read1(dst + bytes_read, bytes_left)
+   end
+   return bytes_read
 end
 
-function BaseStream:write1(ptr, size)
-   ef("to be implemented")
+function Stream:write1(ptr, size)
+   return self.impl:write1(ptr, size)
 end
 
-function BaseStream:read(n)
+function Stream:read(n)
    local READ_BLOCK_SIZE = M.READ_BLOCK_SIZE
    local buf
    if not n then
@@ -99,7 +126,7 @@ end
 ffi.cdef [[ void * memmem (const void *haystack, size_t haystack_len,
                            const void *needle, size_t needle_len); ]]
 
-function BaseStream:read_until(marker)
+function Stream:read_until(marker, keep_marker)
    local buf = buffer.new()
    local start_search_at = 0
    while not self:eof() do
@@ -118,7 +145,11 @@ function BaseStream:read_until(marker)
             assert(#self.read_buffer == 0)
             self.read_buffer = buffer.slice(buf, next_offset)
          end
-         return buffer.copy(buf, marker_offset), true
+         if keep_marker then
+            return buffer.copy(buf, next_offset), true
+         else
+            return buffer.copy(buf, marker_offset), true
+         end
       else
          start_search_at = start_search_at + search_len - #marker + 1
       end
@@ -126,11 +157,11 @@ function BaseStream:read_until(marker)
    return buf, false
 end
 
-function BaseStream:readln(eol)
+function Stream:readln(eol)
    return tostring(self:read_until(eol or "\x0a"))
 end
 
-function BaseStream:write(data)
+function Stream:write(data)
    local size
    if buffer.is_buffer(data) then
       size = #data
@@ -141,68 +172,56 @@ function BaseStream:write(data)
    assert(nbytes==size)
 end
 
-function BaseStream:writeln(line, eol)
+function Stream:writeln(line, eol)
    self:write(tostring(line))
    self:write(eol or "\x0a")
 end
 
-local MemoryStream = util.Class(BaseStream)
-
-function MemoryStream:create()
-   local self = BaseStream:create()
-   self.buffers = {}
-   return self
-end
-
-function MemoryStream:eof()
-   return #self.buffers == 0 and #self.read_buffer == 0
-end
-
-function MemoryStream:write1(ptr, size)
-   table.insert(self.buffers, buffer.copy(ptr, size))
-   return size
-end
-
-function MemoryStream:read1(ptr, size)
-   local dst = ffi.cast("uint8_t*", ptr)
-   local bytes_left = size
-   while #self.buffers > 0 and bytes_left > 0 do
-      local buf = self.buffers[1]
-      local bufsize = #buf
-      if bufsize > bytes_left then
-         ffi.copy(dst, buf.ptr, bytes_left)
-         self.buffers[1] = buffer.slice(buf, bytes_left)
-         bytes_left = 0
-      else
-         ffi.copy(dst, buf.ptr, bufsize)
-         dst = dst + bufsize
-         bytes_left = bytes_left - bufsize
-         table.remove(self.buffers, 1)
-      end
+local function MemoryStream()
+   local self = {}
+   local buffers = {}
+   function self:eof()
+      return #buffers == 0
    end
-   return size - bytes_left
+   function self:write1(ptr, size)
+      table.insert(buffers, buffer.copy(ptr, size))
+      return size
+   end
+   function self:read1(ptr, size)
+      local dst = ffi.cast("uint8_t*", ptr)
+      local bytes_left = size
+      while #buffers > 0 and bytes_left > 0 do
+         local buf = buffers[1]
+         local bufsize = #buf
+         if bufsize > bytes_left then
+            ffi.copy(dst, buf.ptr, bytes_left)
+            buffers[1] = buffer.slice(buf, bytes_left)
+            bytes_left = 0
+         else
+            ffi.copy(dst, buf.ptr, bufsize)
+            dst = dst + bufsize
+            bytes_left = bytes_left - bufsize
+            table.remove(buffers, 1)
+         end
+      end
+      return size - bytes_left
+   end
+   return Stream(self)
 end
 
 local function is_stream(x)
    return type(x) == "table" and x.is_stream
 end
+
 M.is_stream = is_stream
 
 local function make_stream(x)
    if is_stream(x) then
       return x
-   end
-   local s
-   if not x then
-      s = MemoryStream()
-   elseif (type(x)=="table" or type(x)=="cdata") and type(x.stream_impl)=="function" then
-      s = BaseStream()
-      s = x:stream_impl(s)
    else
-      ef("cannot create stream of %s", x)
+      local s = x and Stream(x) or MemoryStream()
+      return util.chainlast(s, x)
    end
-   s.is_stream = true
-   return x and util.chainlast(s, x) or s
 end
 
 function M.copy(s1, s2, cb)

@@ -269,14 +269,15 @@ function File_mt:close()
    end
 end
 
-function File_mt:stream_impl(stream)
+function File_mt:stream_impl()
+   local stream = {}
    local f = self
    local eof = false
    function stream:close()
       return f:close()
    end
    function stream:eof()
-      return eof and #stream.read_buffer == 0
+      return eof
    end
    function stream:read1(ptr, size)
       local nbytes = f:read1(ptr, size)
