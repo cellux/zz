@@ -6,6 +6,49 @@ local mm = require('mm')
 
 local M = {}
 
+local function ReadBuffer()
+   local buf = buffer.new()
+   local offset = 0
+   return {
+      length = function(self)
+         return #buf - offset
+      end,
+      ptr = function(self)
+         return buf.ptr + offset
+      end,
+      consume = function(self, nbytes)
+         offset = offset + nbytes
+         assert(offset <= #buf)
+      end,
+      clear = function(self)
+         buf.len = 0
+         offset = 0
+      end,
+      get = function(self)
+         local rv
+         if offset == 0 then
+            rv = buf
+            buf = buffer.new()
+         else
+            rv = buffer.slice(buf, offset)
+            self:clear()
+         end
+         return rv
+      end,
+      set = function(self, newbuf)
+         buf = newbuf
+         offset = 0
+      end,
+      fill = function(self, stream)
+         if not stream:eof() and self:length() == 0 then
+            local nbytes = stream:read1(buf.ptr, buf.cap)
+            buf.len = nbytes
+            offset = 0
+         end
+      end
+   }
+end
+
 M.READ_BLOCK_SIZE = 4096
 
 local Stream = util.Class()
@@ -20,7 +63,7 @@ function Stream:create(obj)
    return {
       is_stream = true,
       impl = impl,
-      read_buffer = buffer.new(),
+      read_buffer = ReadBuffer(),
    }
 end
 
@@ -29,24 +72,25 @@ function Stream:close()
 end
 
 function Stream:eof()
-   return #self.read_buffer == 0 and self.impl:eof()
+   return self.read_buffer:length() == 0 and self.impl:eof()
 end
 
 function Stream:read1(ptr, size)
    local bytes_read = 0
    local bytes_left = size
    local dst = ffi.cast("uint8_t*", ptr)
-   if #self.read_buffer > 0 then
-      if #self.read_buffer > size then
-         ffi.copy(dst, self.read_buffer.ptr, size)
-         self.read_buffer = buffer.slice(self.read_buffer, size)
+   local read_buffer_length = self.read_buffer:length()
+   if read_buffer_length > 0 then
+      if read_buffer_length > size then
+         ffi.copy(dst, self.read_buffer:ptr(), size)
+         self.read_buffer:consume(size)
          bytes_read = size
          bytes_left = 0
       else
-         ffi.copy(dst, self.read_buffer.ptr, #self.read_buffer)
-         bytes_read = #self.read_buffer
+         ffi.copy(dst, self.read_buffer:ptr(), read_buffer_length)
+         bytes_read = read_buffer_length
          bytes_left = size - bytes_read
-         self.read_buffer.len = 0
+         self.read_buffer:clear()
       end
    end
    if bytes_left > 0 then
@@ -64,9 +108,8 @@ function Stream:read(n)
    local buf
    if not n then
       -- read an arbitrary amount of bytes
-      if #self.read_buffer > 0 then
-         buf = self.read_buffer
-         self.read_buffer = buffer.new()
+      if self.read_buffer:length() > 0 then
+         buf = self.read_buffer:get()
       else
          mm.with_block(READ_BLOCK_SIZE, nil, function(ptr, block_size)
             local nbytes = self:read1(ptr, block_size)
@@ -78,16 +121,15 @@ function Stream:read(n)
       buf = buffer.new(n)
       local bytes_left = n
       while not self:eof() and bytes_left > 0 do
-         if #self.read_buffer > 0 then
-            if #self.read_buffer <= bytes_left then
-               buf:append(self.read_buffer)
-               bytes_left = bytes_left - #self.read_buffer
-               self.read_buffer.len = 0
+         local read_buffer_length = self.read_buffer:length()
+         if read_buffer_length > 0 then
+            if read_buffer_length <= bytes_left then
+               buf:append(self.read_buffer:ptr(), read_buffer_length)
+               bytes_left = bytes_left - read_buffer_length
+               self.read_buffer:clear()
             else
-               buf:append(self.read_buffer, bytes_left)
-               -- buffer.slice() makes a copy of read_buffer[bytes_left:]
-               -- the previous read_buffer will be disposed by the GC
-               self.read_buffer = buffer.slice(self.read_buffer, bytes_left)
+               buf:append(self.read_buffer:ptr(), bytes_left)
+               self.read_buffer:consume(bytes_left)
                bytes_left = 0
             end
          else
@@ -101,10 +143,10 @@ function Stream:read(n)
       -- read until EOF
       local buffers = {}
       local nbytes_total = 0
-      if #self.read_buffer > 0 then
-         table.insert(buffers, self.read_buffer)
-         nbytes_total = nbytes_total + #self.read_buffer
-         self.read_buffer = buffer.new()
+      local read_buffer_length = self.read_buffer:length()
+      if read_buffer_length > 0 then
+         table.insert(buffers, self.read_buffer:get())
+         nbytes_total = nbytes_total + read_buffer_length
       end
       mm.with_block(READ_BLOCK_SIZE, nil, function(ptr, block_size)
          while not self:eof() do
@@ -142,8 +184,8 @@ function Stream:read_until(marker, keep_marker)
          local marker_offset = p - buf.ptr
          local next_offset = marker_offset + #marker
          if next_offset < #buf then
-            assert(#self.read_buffer == 0)
-            self.read_buffer = buffer.slice(buf, next_offset)
+            assert(self.read_buffer:length() == 0)
+            self.read_buffer:set(buffer.slice(buf, next_offset))
          end
          if keep_marker then
             return buffer.copy(buf, next_offset), true
@@ -155,6 +197,16 @@ function Stream:read_until(marker, keep_marker)
       end
    end
    return buf, false
+end
+
+function Stream:read_char()
+   local ch
+   self.read_buffer:fill(self)
+   if self.read_buffer:length() > 0 then
+      ch = string.char(self.read_buffer:ptr()[0])
+      self.read_buffer:consume(1)
+   end
+   return ch
 end
 
 function Stream:readln(eol)

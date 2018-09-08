@@ -310,7 +310,7 @@ testing("stream.read", function()
    assert.equals(util.hexstr(digest.md5(buf)), '079dc470a97a1cf61aaa09a81204f75e')
    -- the stream most likely read past 81398
    -- extra bytes are left in the read buffer
-   assert.equals(f:pos(), 81398+4+#s.read_buffer)
+   assert.equals(f:pos(), 81398+4+s.read_buffer:length())
    local nbytes_remaining = f:size() - (81398+4)
    assert.equals(#s:read(0), nbytes_remaining)
    assert(s:eof())
