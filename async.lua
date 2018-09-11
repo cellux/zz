@@ -141,12 +141,18 @@ local function AsyncModule(sched)
       n_worker_threads = 0
    end
    function self.done()
-      assert(n_active_threads == 0)
-      assert(reserve_queue:empty())
+      if n_active_threads > 0 then
+         pf("WARNING: async.n_active_threads = %d at scheduler shutdown", n_active_threads)
+      end
+      if not reserve_queue:empty() then
+         pf("WARNING: async.reserve_queue is not empty at scheduler shutdown")
+      end
       for _,t in ipairs(thread_pool) do
          t:stop()
       end
-      assert(n_worker_threads == 0)
+      if n_worker_threads > 0 then
+         pf("WARNING: async.n_worker_threads = %d at scheduler shutdown", n_worker_threads)
+      end
       thread_pool = {}
    end
    return self
