@@ -293,7 +293,7 @@ function File_mt:stream_impl()
 end
 
 File_mt.__index = File_mt
-File_mt.__gc = File_mt.close
+--File_mt.__gc = File_mt.close
 
 local File = ffi.metatype("struct zz_fs_File_ct", File_mt)
 
