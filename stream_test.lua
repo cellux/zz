@@ -97,7 +97,12 @@ local function stream_between(input, output)
       end,
       function()
          return input:read_until("\0", true)
-      end
+      end,
+      function()
+         local ch = input:read_char()
+         local size = ch and 1 or 0
+         return buffer.copy(ch, size)
+      end,
    }
    while not input:eof() do
       local piece_of_data = readers[math.random(#readers)]()
@@ -143,4 +148,14 @@ testing("memory stream", function()
    local output = buffer.new()
    stream_between(memory_stream, output)
    assert.equals(util.hexstr(digest.md5(output)), '58823f6d5e1d154d37d9aa2dbaf27371')
+end)
+
+testing("peek", function()
+   local input = stream(fs.open("testdata/arborescence.jpg"))
+   input:read(100)
+   assert.equals(input:peek(1), "\x08")
+   assert.equals(input:peek(8), "\x08\x04\x04\x08\x10\x0b\x09\x0b")
+   assert.equals(input:read(3), "\x08\x04\04")
+   assert.equals(input:peek(5), "\x08\x10\x0b\x09\x0b")
+   input:close()
 end)

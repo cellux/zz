@@ -11,14 +11,14 @@ local function ReadBuffer()
    local offset = 0
    return {
       length = function(self)
-         return #buf - offset
+         return buf.len - offset
       end,
       ptr = function(self)
          return buf.ptr + offset
       end,
       consume = function(self, nbytes)
          offset = offset + nbytes
-         assert(offset <= #buf)
+         assert(offset <= buf.len)
       end,
       clear = function(self)
          buf.len = 0
@@ -39,11 +39,18 @@ local function ReadBuffer()
          buf = newbuf
          offset = 0
       end,
-      fill = function(self, stream)
-         if not stream:eof() and self:length() == 0 then
-            local nbytes = stream:read1(buf.ptr, buf.cap)
-            buf.len = nbytes
-            offset = 0
+      fill = function(self, stream, size)
+         if stream:eof() then return end
+         size = size or (buf.cap - offset)
+         if self:length() < size then
+            local desired_cap = offset + size
+            if buf.cap < desired_cap then
+               buf:resize(desired_cap)
+            end
+            local dst = buf.ptr + buf.len
+            local bytes_to_read = size - self:length()
+            local nbytes = stream:read1_raw(dst, bytes_to_read)
+            buf.len = buf.len + nbytes
          end
       end
    }
@@ -75,6 +82,10 @@ function Stream:eof()
    return self.read_buffer:length() == 0 and self.impl:eof()
 end
 
+function Stream:read1_raw(ptr, size)
+   return self.impl:read1(ptr, size)
+end
+
 function Stream:read1(ptr, size)
    local bytes_read = 0
    local bytes_left = size
@@ -94,7 +105,7 @@ function Stream:read1(ptr, size)
       end
    end
    if bytes_left > 0 then
-      bytes_read = bytes_read + self.impl:read1(dst + bytes_read, bytes_left)
+      bytes_read = bytes_read + self:read1_raw(dst + bytes_read, bytes_left)
    end
    return bytes_read
 end
@@ -213,6 +224,11 @@ function Stream:readln(eol)
    return tostring(self:read_until(eol or "\x0a"))
 end
 
+function Stream:peek(size)
+   self.read_buffer:fill(self, size)
+   return buffer.copy(self.read_buffer:ptr(), self.read_buffer:length())
+end
+
 function Stream:write(data)
    local size
    if buffer.is_buffer(data) then
@@ -271,8 +287,11 @@ local function make_stream(x)
    if is_stream(x) then
       return x
    else
-      local s = x and Stream(x) or MemoryStream()
-      return util.chainlast(s, x)
+      if x then
+         return util.chainlast(Stream(x), x)
+      else
+         return MemoryStream()
+      end
    end
 end
 
