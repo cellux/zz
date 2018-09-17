@@ -538,14 +538,16 @@ function TCPListener:start()
    socket.SO_REUSEADDR = true
    socket:bind(self.sockaddr)
    socket:listen()
-   qpoll(socket.fd, function()
-      local client = socket:accept()
-      sched(function()
-         self.server(stream(client))
-         client:close()
+   sched(function()
+      qpoll(socket.fd, function()
+         local client = socket:accept()
+         sched(function()
+            self.server(stream(client))
+            client:close()
+         end)
       end)
+      socket:close()
    end)
-   socket:close()
 end
 
 M.TCPListener = TCPListener
@@ -568,43 +570,45 @@ function UDPListener:start()
    socket:bind(self.sockaddr)
    sched.poller_add(socket.fd, "rw")
    local clients = {}
-   qpoll(socket.fd, function()
-      local data, peer_addr = socket:recv()
-      local client_id = tostring(peer_addr)
-      repeat
-         if not clients[client_id] then
-            local ss, sc = M.socketpair(ffi.C.PF_LOCAL, ffi.C.SOCK_STREAM)
-            local client = {
-               ss = stream(ss),
-               sc = stream(sc),
-               mtime = sched.now,
-               active = true,
-            }
-            sched.poller_add(ss.fd, "rw")
-            sched(function()
-               self.server(client.sc)
-               client.active = false
-               sc:close()
-            end)
-            sched(function()
-               while client.active do
-                  local data = client.ss:read()
-                  socket:sendto(data, peer_addr)
-               end
-               sched.poller_del(ss.fd)
-               ss:close()
-            end)
-            clients[client_id] = client
-         end
-         if (sched.now - clients[client_id].mtime) > 3600 then
-            clients[client_id].active = false
-            clients[client_id] = nil
-         end
-      until clients[client_id] and clients[client_id].active
-      clients[client_id].ss:write(data)
+   sched(function()
+      qpoll(socket.fd, function()
+         local data, peer_addr = socket:recv()
+         local client_id = tostring(peer_addr)
+         repeat
+            if not clients[client_id] then
+               local ss, sc = M.socketpair(ffi.C.PF_LOCAL, ffi.C.SOCK_STREAM)
+               local client = {
+                  ss = stream(ss),
+                  sc = stream(sc),
+                  mtime = sched.now,
+                  active = true,
+               }
+               sched.poller_add(ss.fd, "rw")
+               sched(function()
+                  self.server(client.sc)
+                  client.active = false
+                  sc:close()
+               end)
+               sched(function()
+                  while client.active do
+                     local data = client.ss:read()
+                     socket:sendto(data, peer_addr)
+                  end
+                  sched.poller_del(ss.fd)
+                  ss:close()
+               end)
+               clients[client_id] = client
+            end
+            if (sched.now - clients[client_id].mtime) > 3600 then
+               clients[client_id].active = false
+               clients[client_id] = nil
+            end
+         until clients[client_id] and clients[client_id].active
+         clients[client_id].ss:write(data)
+      end)
+      sched.poller_del(socket.fd)
+      socket:close()
    end)
-   sched.poller_del(socket.fd)
-   socket:close()
 end
 
 M.UDPListener = UDPListener
