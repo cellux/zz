@@ -281,7 +281,7 @@ function File_mt:stream_impl()
    end
    function stream:read1(ptr, size)
       local nbytes = f:read1(ptr, size)
-      if nbytes < size then
+      if nbytes == 0 then
          eof = true
       end
       return nbytes
