@@ -318,6 +318,22 @@ function M.pipe(s1, s2)
    return M.copy(s1, s2, function() s2:close() end)
 end
 
+function M.duplex(input, output)
+   local self = {}
+   input = make_stream(input)
+   output = make_stream(output)
+   function self:eof()
+      return input:eof()
+   end
+   function self:read1(ptr, size)
+      return input:read1(ptr, size)
+   end
+   function self:write1(ptr, size)
+      return output:write1(ptr, size)
+   end
+   return Stream(self)
+end
+
 local M_mt = {}
 
 function M_mt:__call(...)
