@@ -310,6 +310,10 @@ function M.open(path, flags, mode)
    end
 end
 
+function M.fd(fd)
+   return File(fd)
+end
+
 function M.readfile(path, rsize)
    local f = M.open(path)
    local contents = stream(f):read(rsize or 0)
