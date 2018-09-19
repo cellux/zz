@@ -85,6 +85,7 @@ require('globals')
 local function sched_main(M)
    if type(M) == 'table' and type(M.main) == 'function' then
       local sched = require('sched')
+      local signal = require('signal')
       sched(M.main)
       sched()
    end

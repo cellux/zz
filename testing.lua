@@ -154,6 +154,7 @@ function TestSuite:run(tc)
    local fdcount_at_start = fdcount()
    self:walk(run_test, function(t) return t:is_nosched() end)
    local sched = require('sched')
+   local signal = require('signal')
    local function sched_test(t)
       if t:is_exclusive() then
          sched.exclusive(run_test, t)
