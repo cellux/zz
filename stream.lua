@@ -75,7 +75,7 @@ function Stream:create(obj)
 end
 
 function Stream:close()
-   return self.impl:close()
+   return self.impl.close and self.impl:close()
 end
 
 function Stream:eof()
