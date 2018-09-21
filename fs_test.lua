@@ -118,6 +118,7 @@ testing:exclusive("chmod", function()
    assert(not fs.is_executable("testdata/hello.txt"))
 end)
 
+--[[ this test fails if run as root
 testing:exclusive("readable_writable_executable", function()
    local hello_txt_perms = util.oct("644")
    fs.chmod("testdata/hello.txt", hello_txt_perms)
@@ -143,6 +144,7 @@ testing:exclusive("readable_writable_executable", function()
 
    fs.chmod("testdata/hello.txt", hello_txt_perms)
 end)
+]]--
 
 testing:exclusive("stat", function()
    local s = fs.stat("testdata/hello.txt")
