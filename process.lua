@@ -116,6 +116,8 @@ function M.execvp(path, argv)
       execvp_argv[i-1] = ffi.cast("char*", argv[i])
    end
    execvp_argv[#argv] = nil
+   -- unblock all signals (signal mask is preserved through execvp)
+   require('signal').unblock()
    -- if execvp() is successful, the following call shall not return
    util.check_errno("execvp", ffi.C.execvp(path, execvp_argv))
 end
