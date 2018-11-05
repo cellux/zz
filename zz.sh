@@ -146,6 +146,7 @@ build_luajit() {
       -e 's/^(BUILDMODE)=.*/\1= static/' \
       -e 's/^(XCFLAGS)=.*/\1= -DLUAJIT_ENABLE_LUA52COMPAT/' \
       "$LUAJIT_ROOT/src/Makefile"
+    touch "$LUAJIT_ROOT/.patched"
     run make -C "$LUAJIT_ROOT" clean amalg
   fi
   if [ "$LUAJIT_LIB" -nt "$LIBDIR/$(basename "$LUAJIT_LIB")" ]; then
@@ -169,6 +170,7 @@ build_nanomsg() {
   extract "$NANOMSG_TGZ" "$NANOMSG_DIR"
   if [ ! -e "$NANOMSG_LIB" ]; then
     run ln -sfvT . "$NANOMSG_ROOT/src/nanomsg"
+    touch "$NANOMSG_ROOT/.patched"
     (cd "$NANOMSG_ROOT" && run cmake -DNN_STATIC_LIB=ON -DNN_ENABLE_DOC=OFF -DNN_TOOLS=OFF .)
     (cd "$NANOMSG_ROOT" && run cmake --build .)
     (cd "$NANOMSG_ROOT" && run ctest -G Debug .)
