@@ -1,10 +1,15 @@
 # ZZ
 
-ZZ is a LuaJIT-based app engine with a small core, a growing set of extension libraries and a command line tool `zz` which can be used to compile ZZ programs into self-contained binary executables.
+ZZ is a general-purpose app engine built on top of LuaJIT and C. It
+has a small core, a growing set of extension libraries and a command
+line tool `zz` which can be used to compile ZZ programs into
+self-contained binary executables.
 
-The current version only runs on Linux.
+The current version only supports Linux.
 
-> Warning: This project is work in progress. The code is continuously changing/evolving as I figure out what works and what doesn't. Use at your own risk.
+> Warning: This project is work in progress. The code is continuously
+> changing/evolving as I figure out what works and what doesn't. Use
+> at your own risk.
 
 ## Core features
 
@@ -13,10 +18,9 @@ The current version only runs on Linux.
 * message-based communication between Lua code and C threads (nanomsg, msgpack)
 * OS signals are converted into events and injected into the event queue (signal)
 * non-blocking timers (time)
-* non-blocking Unix/TCP/UDP sockets via epoll (socket)
-* non-blocking file operations (file)
+* non-blocking Unix/TCP/UDP sockets (epoll, net)
+* non-blocking file-system operations and streams (fs, stream)
 * process management (process)
-* access to environment variables (env)
 
 ## Internal dependencies
 
@@ -27,14 +31,25 @@ The current version only runs on Linux.
 
 These are either automatically downloaded upon compilation or bundled with the source.
 
-## Usage
+## Installation
 
-The packaging system has been borrowed from Go: the environment variable `ZZPATH` points to a directory (default: `$HOME/zz`) which stores the source code, object files, libraries and binaries of all ZZ packages.
+Build dependencies:
+
+* bash
+* curl
+* sha1sum
+* awk
+* make
+* gcc
+* binutils
+* cmake
+
+How to build:
 
 ```bash
 ZZPATH=$HOME/zz
 
-# create directory for this package
+# create package directory
 mkdir -p $ZZPATH/src/github.com/cellux/zz
 
 # clone package
@@ -47,9 +62,27 @@ make test
 make install
 ```
 
-If installation succeeds, you shall find a `zz` executable under `$ZZPATH/bin`. It's advisable to place this directory onto PATH as all ZZ executables intended for global consumption are installed there.
+If installation succeeds, you shall find a `zz` executable under
+`$ZZPATH/bin`. It's advisable to place this directory onto PATH as all
+ZZ executables intended for global consumption are installed there.
 
-TODO: Describe how to create programs/packages on top of ZZ.
+## Examples
+
+```
+zz get github.com/cellux/zz_examples
+```
+
+This command shall fetch and build the `zz_examples` package with all
+of its dependencies, storing everything under `$ZZPATH`.
+
+You can run example programs via `zz run`.
+
+Try this one for a start:
+
+```
+cd $ZZPATH/src/github.com/cellux/zz_examples/opengl/progschj
+zz run 07-geometry-shader-blending.lua
+```
 
 ## Goals
 
