@@ -3,6 +3,7 @@ local sched = require('sched')
 local util = require('util')
 local buffer = require('buffer')
 local mm = require('mm')
+local re = require('re')
 
 local M = {}
 
@@ -191,12 +192,34 @@ function Stream:read_until(marker, keep_marker)
          break
       end
       buf:append(chunk) -- buffer automatically grows as needed
-      local search_ptr = buf.ptr + start_search_at
-      local search_len = buf.len - start_search_at
-      local p = ffi.cast("uint8_t*", ffi.C.memmem(search_ptr, search_len, marker, #marker))
+      local p = nil -- pointer to match (if found)
+      local match_length = 0
+      if re.is_regex(marker) then
+         local m, is_partial = marker:match(buf, start_search_at, re.PARTIAL)
+         if m then
+            local _,lo,hi = m:group(0)
+            if not is_partial then
+               p = ffi.cast("uint8_t*", buf.ptr + lo)
+               match_length = hi - lo
+            else
+               start_search_at = lo -- beginning of partial match
+            end
+         else
+            start_search_at = buf.len
+         end
+      else
+         local search_ptr = buf.ptr + start_search_at
+         local search_len = buf.len - start_search_at
+         p = ffi.cast("uint8_t*", ffi.C.memmem(search_ptr, search_len, marker, #marker))
+         if p ~= nil then
+            match_length = #marker
+         else
+            start_search_at = buf.len - #marker + 1
+         end
+      end
       if p ~= nil then
          local marker_offset = p - buf.ptr
-         local next_offset = marker_offset + #marker
+         local next_offset = marker_offset + match_length
          if next_offset < #buf then
             assert(self.read_buffer:length() == 0)
             self.read_buffer:set(buffer.slice(buf, next_offset))
@@ -206,8 +229,6 @@ function Stream:read_until(marker, keep_marker)
          else
             return buffer.copy(buf, marker_offset), true
          end
-      else
-         start_search_at = start_search_at + search_len - #marker + 1
       end
    end
    return buf, false

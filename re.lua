@@ -1,4 +1,5 @@
 local ffi = require('ffi')
+local buffer = require('buffer')
 
 ffi.cdef [[
 struct pcre;
@@ -35,14 +36,21 @@ M.NOTEOL          = 0x00000100
 M.UNGREEDY        = 0x00000200
 M.NOTEMPTY        = 0x00000400
 M.UTF8            = 0x00000800
+M.PARTIAL         = 0x00008000
 M.NEWLINE_CR      = 0x00100000
 M.NEWLINE_LF      = 0x00200000
 M.NEWLINE_CRLF    = 0x00300000
 M.NEWLINE_ANY     = 0x00400000
 M.NEWLINE_ANYCRLF = 0x00500000
 
-local MatchObject_mt = {
-   __index = function(self, i)
+local function MatchObject(subject, buf, stringcount, ovector)
+   local self = {
+      subject = subject,
+      buf = buf,
+      stringcount = stringcount,
+      ovector = ovector,
+   }
+   function self:group(i)
       if i < 0 or i >= self.stringcount then
          return nil
       else
@@ -51,19 +59,11 @@ local MatchObject_mt = {
          if lo == -1 and hi == -1 then
             return nil
          else
-            return self.subject:sub(lo+1, hi)
+            return ffi.string(self.buf.ptr+lo, hi-lo), lo, hi
          end
       end
-   end,
-}
-
-local function MatchObject(subject, stringcount, ovector)
-   local self = {
-      subject = subject,
-      stringcount = stringcount,
-      ovector = ovector,
-   }
-   return setmetatable(self, MatchObject_mt)
+   end
+   return setmetatable(self, { __index = self.group })
 end
 
 local pcre_mt = {
@@ -83,12 +83,13 @@ local pcre_mt = {
       end
    end,
    match = function(self, subject, startoffset, options)
+      local buf = buffer.wrap(subject)
       local ovecsize = 3*16
       local ovector = ffi.new("int[?]", ovecsize)
       local rv = pcre.pcre_exec(self.pcre,
                                 self.pcre_extra,
-                                subject,
-                                #subject,
+                                buf.ptr,
+                                buf.len,
                                 startoffset or 0,
                                 options or 0,
                                 ovector,
@@ -96,12 +97,15 @@ local pcre_mt = {
       if rv == -1 then
          -- PCRE_ERROR_NOMATCH
          return nil
+      elseif rv == -12 then
+         -- PCRE_ERROR_PARTIAL
+         return MatchObject(subject, buf, 3, ovector), true
       elseif rv < 0 then
          ef("pcre_exec() failed (%d)", rv)
       elseif rv == 0 then
          error("pcre_exec() failed: vector overflow")
       else
-         return MatchObject(subject, rv, ovector)
+         return MatchObject(subject, buf, rv, ovector), false
       end
    end,
 }
@@ -121,6 +125,10 @@ function M.compile(pattern, options)
    end
    local self = { pcre = pcre }
    return setmetatable(self, pcre_mt)
+end
+
+function M.is_regex(x)
+   return type(x) == "table" and getmetatable(x) == pcre_mt
 end
 
 function M.match(pattern, subject, startoffset, options)

@@ -17,7 +17,7 @@ testing("match", function()
    assert(m==nil)
    m = re.match("\\s+", "joo\n\nabc", 3)
    assert(m[0]=="\n\n")
-   
+
    assert(re.match("\\s+$", "hello, world!\n", 8))
    assert(not re.match("\\s+$", "hello, world!\n", 8, re.ANCHORED))
 end)
@@ -65,4 +65,45 @@ testing("Matcher", function()
    assert(m[0]=="abc123")
    assert(m[1]=="abc")
    assert(m[2]=="123")
+end)
+
+testing("is_regex", function()
+   assert(not re.is_regex("f(.)o"))
+   local r = re.compile("f(.)o")
+   assert(re.is_regex(r))
+   assert(not re.is_regex({}))
+end)
+
+testing("caseless matching", function()
+  local subj = "The Neverending Story Begins Here"
+  local m = re.match("story", subj)
+  assert(m==nil)
+  local m = re.match("(?i)story", subj)
+  assert(m[0]=="Story")
+  local m = re.compile("story", re.CASELESS):match(subj)
+  assert(m[0]=="Story")
+end)
+
+testing("multiline matching", function()
+  local subj = [[int main(int argc, char **argv) {
+  printf("Hello, world!\n");
+}
+/* end of main */]]
+  local m = re.compile("..$"):match(subj)
+  assert(m[0]=="*/")
+  local m = re.compile("(?m)..$"):match(subj)
+  assert(m[0]==" {")
+  local m = re.compile("..$", re.MULTILINE):match(subj)
+  assert(m[0]==" {")
+end)
+
+testing("partial matching", function()
+  local m = re.match("(?<=abc)123", "xyzabc12")
+  assert(m==nil)
+  local m, is_partial = re.match("(?<=abc)123", "xyzabc12", 0, re.PARTIAL)
+  assert(is_partial)
+  assert(m[0]=="abc12")
+  local m, is_partial = re.match("(?<=abc)123", "xyzabc123", 0, re.PARTIAL)
+  assert(not is_partial)
+  assert(m[0]=="123")
 end)
