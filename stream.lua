@@ -61,17 +61,20 @@ M.READ_BLOCK_SIZE = 4096
 local Stream = util.Class()
 
 function Stream:create(obj)
-   local impl
-   if type(obj.stream_impl) == "function" then
-      impl = obj:stream_impl()
-   else
-      impl = obj
+   local self = { obj = obj } -- keep reference to prevent GC
+   if type(obj) == "string" then
+      obj = buffer.wrap(obj)
    end
-   return {
-      is_stream = true,
-      impl = impl,
-      read_buffer = ReadBuffer(),
-   }
+   if type(obj.stream_impl) == "function" then
+      -- obj can create an implementation of the stream API
+      self.impl = obj:stream_impl()
+   else
+      -- obj directly implements the stream API
+      self.impl = obj
+   end
+   self.read_buffer = ReadBuffer()
+   self.is_stream = true
+   return self
 end
 
 function Stream:close()

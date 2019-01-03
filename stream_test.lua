@@ -29,7 +29,8 @@ testing("memory streams (fifos)", function()
    s:write("hello\nworld\n")
    assert.equals(s:read(2), "he")
    assert.equals(s:read(5), "llo\nw")
-   assert.equals(s:read(0), "orld\n")
+   s:write("\nx")
+   assert.equals(s:read(0), "orld\n\nx")
    assert(s:eof())
 
    -- writeln works with numbers
@@ -121,6 +122,13 @@ end)
 
 testing("buffer", function()
    local input = fs.readfile("testdata/arborescence.jpg")
+   output = buffer.new()
+   stream_between(input, output)
+   assert.equals(util.hexstr(digest.md5(output)), '58823f6d5e1d154d37d9aa2dbaf27371')
+end)
+
+testing("string", function()
+   local input = tostring(fs.readfile("testdata/arborescence.jpg"))
    output = buffer.new()
    stream_between(input, output)
    assert.equals(util.hexstr(digest.md5(output)), '58823f6d5e1d154d37d9aa2dbaf27371')
