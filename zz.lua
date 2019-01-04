@@ -1054,18 +1054,25 @@ local function checkout(package_name, opts, seen)
    if seen[package_name] then
       return
    end
+   local function plog(action)
+      log(sf("[%s] %s", action, package_name))
+   end
    local pkgname, pkgurl = parse_package_name(package_name)
    local srcdir = sf("%s/src/%s", ZZPATH, pkgname)
    if not fs.exists(srcdir) then
+      plog("CLONE")
       git.clone(pkgurl, srcdir)
    elseif opts.update then
       with_cwd(srcdir, function()
+         plog("FETCH")
          git.fetch()
       end)
    end
    with_cwd(srcdir, function()
+      plog("CHECKOUT")
       git.checkout("master")
       if opts.update then
+         plog("PULL")
          git.pull()
       end
    end)
