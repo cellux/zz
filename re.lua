@@ -24,6 +24,8 @@ local pcre = ffi.load("pcre")
 
 local M = {}
 
+local OVECTOR_SLOTS = 16
+
 M.CASELESS        = 0x00000001
 M.MULTILINE       = 0x00000002
 M.DOTALL          = 0x00000004
@@ -84,7 +86,7 @@ local pcre_mt = {
    end,
    match = function(self, subject, startoffset, options)
       local buf = buffer.wrap(subject)
-      local ovecsize = 3*16
+      local ovecsize = 3 * OVECTOR_SLOTS
       local ovector = ffi.new("int[?]", ovecsize)
       local rv = pcre.pcre_exec(self.pcre,
                                 self.pcre_extra,
