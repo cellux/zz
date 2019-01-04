@@ -116,7 +116,17 @@ local pcre_mt = {
 pcre_mt.__index = pcre_mt
 pcre_mt.__gc = pcre_mt.delete
 
+local function is_regex(x)
+   return type(x) == "table" and getmetatable(x) == pcre_mt
+end
+
+M.is_regex = is_regex
+
 function M.compile(pattern, options)
+   if is_regex(pattern) then
+      assert(options == nil)
+      return pattern
+   end
    local errptr = ffi.new("const char*[1]")
    local erroffset = ffi.new("int[1]")
    local pcre = pcre.pcre_compile(pattern,
@@ -129,10 +139,6 @@ function M.compile(pattern, options)
    end
    local self = { pcre = pcre }
    return setmetatable(self, pcre_mt)
-end
-
-function M.is_regex(x)
-   return type(x) == "table" and getmetatable(x) == pcre_mt
 end
 
 function M.match(pattern, subject, startoffset, options)
