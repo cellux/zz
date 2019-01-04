@@ -114,6 +114,7 @@ local pcre_mt = {
 }
 
 pcre_mt.__index = pcre_mt
+pcre_mt.__gc = pcre_mt.delete
 
 function M.compile(pattern, options)
    local errptr = ffi.new("const char*[1]")
