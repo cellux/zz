@@ -152,10 +152,10 @@ function M.Matcher(subject)
       match = M.compile(pattern):match(subject)
       return match
    end
-   function self:at(i)
-      return match[i]
+   function self:group(i)
+      return match and match:group(i)
    end
-   return setmetatable(self, { __index = self.at })
+   return setmetatable(self, { __index = self.group })
 end
 
 return M
