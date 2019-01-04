@@ -1,3 +1,17 @@
+-- when this template is instantiated, definitions of the following
+-- variables are added to the top:
+--
+-- ZZ_PACKAGE:
+--   FQPN (fully qualified package name) of the containing package
+--
+-- ZZ_CORE_PACKAGE:
+--   FQPN of the ZZ core library (github.com/cellux/zz)
+--
+-- ZZ_MODNAME_MAP:
+--   map which can be used to resolve fully qualified module names
+--   (`FQPN/module`) to their lj_requireable mangled names
+
+-- save the original require function
 local lj_require = _G.require
 
 local function zz_require(modname)
@@ -12,49 +26,55 @@ local function reverse(t)
    return rv
 end
 
-local function setup_require(pname, seen)
-   if seen[pname] then return end
-   seen[pname] = true
+local function setup_require(fqpn, seen)
+   -- create and return a package-specific require function which
+   -- looks up modules in the package's declared dependency order
+   --
+   -- also add it to the package descriptor (pd.require)
+   if seen[fqpn] then return end
+   seen[fqpn] = true
    -- load package descriptor
-   local pd = zz_require(pname..'/package')
+   local pd = zz_require(fqpn..'/package')
    local loaders = {}
    pd.imports = pd.imports or {}
    local imports_seen = {}
-   local function process_import(dname)
-      if not imports_seen[dname] then
-         setup_require(dname, seen) -- generates dd.require()
-         local dd = zz_require(dname..'/package')
+   local function process_import(fqpn)
+      if not imports_seen[fqpn] then
+         setup_require(fqpn, seen) -- generates dd.require()
+         local dd = zz_require(fqpn..'/package') -- loaded from cache
          -- modules exported by imported packages should be
          -- requireable by their short name
          dd.exports = dd.exports or {}
          for _,m in ipairs(dd.exports) do
-            loaders[m] = dd.require             -- short
-            loaders[dname..'/'..m] = dd.require -- qualified
+            loaders[m] = dd.require            -- short
+            loaders[fqpn..'/'..m] = dd.require -- fully qualified
          end
-         imports_seen[dname] = true
+         imports_seen[fqpn] = true
       end
    end
-   -- ZZ_CORE_PACKAGE is injected by the build system
-   process_import(ZZ_CORE_PACKAGE)
    -- the order of packages in pd.imports matters: if packages P1 and
    -- P2 both define module M but P2 comes *before* P1 in the import
    -- list, require(M) will find the P2 version
    --
    -- a specific version can pulled in by requiring the fully
    -- qualified module name e.g. "github.com/cellux/zz/util"
-   for _,dname in ipairs(reverse(pd.imports)) do
-      process_import(dname)
+   for _,fqpn in ipairs(reverse(pd.imports)) do
+      process_import(fqpn)
    end
+   -- import the ZZ core library last: this ensures that none of the
+   -- imports can override core modules like `sched`, `fs`, etc.
+   process_import(ZZ_CORE_PACKAGE)
+   -- create package-specific require function
    pd.require = function(m)
       return (loaders[m] or lj_require)(m)
    end
-   local pd_env = setmetatable({ require = pd.require }, { __index = _G })
+   local package_env = setmetatable({ require = pd.require }, { __index = _G })
    pd.exports = pd.exports or {}
    local function process_export(m)
-      local mangled = ZZ_MODNAME_MAP[pname..'/'..m]
-      local loaded = nil
+      local mangled = ZZ_MODNAME_MAP[fqpn..'/'..m]
+      local cached = nil
       local m_loader = function()
-         if not loaded then
+         if not cached then
             -- in LuaJIT, the loader for linked bytecode is defined in
             -- lib_package.c:lj_cf_package_loader_preload() which is
             -- the first element of the package.loaders array
@@ -62,13 +82,17 @@ local function setup_require(pname, seen)
             -- if (when?) package.loaders changes, this will blow up
             local preload = package.loaders[1]
             local chunk = preload(mangled)
-            setfenv(chunk, pd_env)
-            loaded = chunk()
+            -- ensure that require() calls inside the module use the
+            -- containing package's require function
+            setfenv(chunk, package_env)
+            cached = chunk()
          end
-         return loaded
+         return cached
       end
+      -- if package P exports module M, require(M) inside P shall
+      -- return the local M even if a dependency (or core) exports M
       loaders[m] = m_loader
-      loaders[pname..'/'..m] = m_loader
+      loaders[fqpn..'/'..m] = m_loader
    end
    for _,m in ipairs(pd.exports) do
       process_export(m)
@@ -91,8 +115,10 @@ local function sched_main(M)
    end
 end
 
-local function run_module(modname)
-   sched_main(lj_require(modname))
+local function run_module(mangled_module_name)
+   -- if the module has no main function, requiring it is the same as running it
+   -- if it has a main function, sched_main() will invoke it
+   sched_main(lj_require(mangled_module_name))
 end
 
 local function run_script(path)
