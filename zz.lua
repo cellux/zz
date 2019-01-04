@@ -38,64 +38,18 @@ Usage: zz <command> [options] [args]
 
 Available commands:
 
-zz checkout [-u] <package>
+  checkout [-u|--update] [-r|--recursive] <package>
+  build [-r|--recursive] [<package>]
+  install [<package>]
+  get [-u|--update] <package>  
+  run <script-path>
+  test [<test>...]
+  clean [<package>]
+  distclean [<package>]
 
-  1. If $ZZPATH/src/<package> does not exist yet:
+Global options:
 
-     git clone <package> into $ZZPATH/src/<package>
-
-     Otherwise run `git fetch' under $ZZPATH/src/<package>
-
-  2. Run `git checkout master' under $ZZPATH/src/<package>
-
-  3. If -u has been given:
-
-     Run `git pull` under $ZZPATH/src/<package>
-
-zz build [<package>]
-
-  Parse package descriptor P of the given <package> and build P
-  according to the instructions inside the descriptor:
-
-  1. For each native dependency N in P.native:
-
-     a. download N
-     b. extract N
-     c. patch N (if needed)
-     d. compile N
-     e. copy the library to $ZZPATH/lib/<package>/libN.a
-
-  2. For each module M in P.exports:
-
-     a. compile M.lua into M.lo
-     b. compile M.c into M.o (if it exists)
-     c. add M.lo and M.o to $ZZPATH/lib/<package>/libP.a
-
-  3. For each app A in P.apps:
-
-     a. compile A.lua into A.lo
-     b. compile A.c into A.o (if A.c exists)
-     c. generate and compile _main.lua which:
-        i.  requires A
-        ii. invokes A.main() if it exists
-     d. generate and compile _main.c which:
-        i.  initalizes a LuaJIT VM
-        ii. requires the _main module
-     e. link _main.lo and _main.o with:
-        i.   A.lo (and A.o if it exists)
-        ii.  the library set of P
-        iii. the library sets of all packages listed in P.imports
-     f. save the resulting executable to $ZZPATH/bin/<package>/A
-
-  The library set of package P consists of:
-
-     a. $ZZPATH/lib/<package>/libP.a
-     b. all native dependencies listed in P.native
-
-  Without a <package> argument, attempt to determine which package
-  contains the current directory (by looking for the package
-  descriptor) and build that.
-
+  -q|--quiet: keep quiet
 ]]
    process.exit(0)
 end
