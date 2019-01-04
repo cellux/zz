@@ -47,7 +47,7 @@ M.NEWLINE_ANYCRLF = 0x00500000
 
 local function MatchObject(subject, buf, stringcount, ovector)
    local self = {
-      subject = subject,
+      subject = subject, -- prevent GC
       buf = buf,
       stringcount = stringcount,
       ovector = ovector,
@@ -100,13 +100,14 @@ local pcre_mt = {
          -- PCRE_ERROR_NOMATCH
          return nil
       elseif rv == -12 then
-         -- PCRE_ERROR_PARTIAL
+         -- PCRE_ERROR_PARTIAL: match info stored in the first 3 slots
          return MatchObject(subject, buf, 3, ovector), true
       elseif rv < 0 then
          ef("pcre_exec() failed (%d)", rv)
       elseif rv == 0 then
          error("pcre_exec() failed: vector overflow")
       else
+         -- rv is the number of slots filled with match info
          return MatchObject(subject, buf, rv, ovector), false
       end
    end,
