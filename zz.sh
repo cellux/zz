@@ -72,7 +72,7 @@ CMP_ROOT="native/$CMP_DIR"
 CMP_SRC="$CMP_ROOT"
 CMP_OBJ="$CMP_SRC/cmp.o"
 
-NANOMSG_VER="1.1.2"
+NANOMSG_VER="1.1.5"
 NANOMSG_TGZ="nanomsg-$NANOMSG_VER.tar.gz"
 NANOMSG_URL="https://github.com/nanomsg/nanomsg/archive/$NANOMSG_VER.tar.gz"
 NANOMSG_DIR="nanomsg-$NANOMSG_VER"

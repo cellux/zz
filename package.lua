@@ -4,7 +4,7 @@ P.package = "github.com/cellux/zz"
 
 local LUAJIT_VER  = "2.1.0-beta3"
 local CMP_VER     = "10"
-local NANOMSG_VER = "1.1.2"
+local NANOMSG_VER = "1.1.5"
 
 P.native = {}
 
