@@ -22,6 +22,28 @@ testing("match", function()
    assert(not re.match("\\s+$", "hello, world!\n", 8, re.ANCHORED))
 end)
 
+testing("MatchObject:group()", function()
+   local m = re.match("(\\w+).*?(\\d+)", " Chirac   123Regale")
+
+   -- group(0) corresponds to the entire match
+   local match,lo,hi = m:group(0)
+   assert(match=="Chirac   123")
+   assert(lo==1)
+   assert(hi==13)
+
+   -- group(1) corresponds to the first subpattern
+   local match,lo,hi = m:group(1)
+   assert(match=="Chirac")
+   assert(lo==1)
+   assert(hi==7)
+
+   -- group(2) corresponds to the second subpattern
+   local match,lo,hi = m:group(2)
+   assert(match=="123")
+   assert(lo==10)
+   assert(hi==13)
+end)
+
 testing("compile", function()
    local r = re.compile("f(.)o")
    local m = r:match("barfoobar")
@@ -32,6 +54,13 @@ testing("compile", function()
    assert(m[2]==nil)
    m = r:match("barfoebar")
    assert(m==nil)
+end)
+
+testing("match accepts compiled pattern", function()
+   local r = re.compile("f(.)o")
+   local m = re.match(r, "barfoobar")
+   assert(m[0]=="foo")
+   assert(m[1]=="o")
 end)
 
 testing("match at beginning", function()
@@ -107,3 +136,4 @@ testing("partial matching", function()
   assert(not is_partial)
   assert(m[0]=="123")
 end)
+
