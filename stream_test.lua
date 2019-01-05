@@ -91,6 +91,30 @@ testing("read_until regex", function()
    assert.equals(s:read_until(r), "")
 end)
 
+testing("match", function()
+   local s = stream("The realization that this universe is the body of God.")
+   local m = s:match("real.*\\b(u.+?)\\b.*th")
+   assert.equals(m[0], "realization that this universe is th")
+   assert.equals(m[1], "universe")
+   -- stream:match() consumes what it matched
+   assert.equals(s:read_char(), "e")
+   -- if there is no match, nothing changes in the stream state
+   assert.is_nil(s:match("won't match"))
+   assert.equals(s:read_until("of "), " body ")
+   assert.equals(s:read(), "God.")
+
+   local s = stream(fs.open("testdata/arborescence.jpg"))
+   local m = s:match("uhi\\w+!")
+   assert.equals(m[0], "uhiWIY6tU!")
+   local m = s:match("o...O")
+   assert.equals(m[0], "oZSmO")
+   assert.is_nil(s:match("jumbo"))
+   assert.equals(s:peek(2), "\xff\x00")
+   local m = s:match("\\{\\*.+?\\d(\\w+)")
+   assert.equals(m[1], "jfkE")
+   s:close()
+end)
+
 testing("read_char", function()
    local buf = buffer.copy("\"This is not too good\", he said.")
    local s = stream(buf)
@@ -189,6 +213,9 @@ testing("peek", function()
    assert.equals(input:peek(1), "\x08")
    assert.equals(input:peek(8), "\x08\x04\x04\x08\x10\x0b\x09\x0b")
    assert.equals(input:read(3), "\x08\x04\04")
+   -- if the read buffer has more data in it than the peek size,
+   -- peek() shall only return size bytes
+   input:match("pereszteg") -- fill the read buffer
    assert.equals(input:peek(5), "\x08\x10\x0b\x09\x0b")
    input:close()
 end)

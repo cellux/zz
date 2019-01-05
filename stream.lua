@@ -234,6 +234,37 @@ function Stream:read_until(marker, keep_marker)
    return buf, false
 end
 
+function Stream:match(pattern)
+   pattern = re.compile(pattern)
+   local buf = buffer.new()
+   local startoffset = 0
+   while true do
+      local chunk = self:read()
+      if #chunk == 0 then
+         assert(self.read_buffer:length() == 0)
+         self.read_buffer:set(buf)
+         break
+      end
+      buf:append(chunk)
+      local m, is_partial = pattern:match(buf, startoffset, re.PARTIAL)
+      if m then
+         local match, lo, hi = m:group(0)
+         if is_partial then
+            startoffset = lo
+         else
+            if hi < #buf then
+               assert(self.read_buffer:length() == 0)
+               self.read_buffer:set(buffer.slice(buf, hi))
+            end
+            return m
+         end
+      else
+         startoffset = buf.len
+      end
+   end
+   return nil
+end
+
 function Stream:read_char()
    local ch
    self.read_buffer:fill(self)
@@ -250,7 +281,8 @@ end
 
 function Stream:peek(size)
    self.read_buffer:fill(self, size)
-   return buffer.copy(self.read_buffer:ptr(), self.read_buffer:length())
+   return buffer.copy(self.read_buffer:ptr(),
+                      math.min(size, self.read_buffer:length()))
 end
 
 function Stream:write(data)
