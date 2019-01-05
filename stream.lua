@@ -180,6 +180,22 @@ function Stream:read(n)
    return buf
 end
 
+function Stream:unread(data)
+   local rbl = self.read_buffer:length()
+   if rbl == 0 then
+      if buffer.is_buffer(data) then
+         self.read_buffer:set(data)
+      else
+         self.read_buffer:set(buffer.copy(data))
+      end
+   else
+      local read_buffer = buffer.new(#data + rbl)
+      read_buffer:append(data)
+      read_buffer:append(self.read_buffer:ptr(), rbl)
+      self.read_buffer:set(read_buffer)
+   end
+end
+
 ffi.cdef [[ void * memmem (const void *haystack, size_t haystack_len,
                            const void *needle, size_t needle_len); ]]
 
