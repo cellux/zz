@@ -115,6 +115,13 @@ testing("match", function()
    s:close()
 end)
 
+testing("match at beginning", function()
+   local s = stream("Altered Carbon in the Black Mirror")
+   assert.is_nil(s:match("^C\\w+"))
+   assert.equals(s:match("C\\w+")[0], "Carbon")
+   assert.equals(s:read(), " in the Black Mirror")
+end)
+
 testing("read_char", function()
    local buf = buffer.copy("\"This is not too good\", he said.")
    local s = stream(buf)
