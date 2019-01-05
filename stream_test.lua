@@ -122,6 +122,11 @@ testing("match at beginning", function()
    assert.equals(s:read(), " in the Black Mirror")
 end)
 
+testing("match does not return empty matches", function()
+   local s = stream("123")
+   assert.is_nil(s:match("^(\\.[0-9]+)?(e-?[0-9]+)?"))
+end)
+
 testing("read_char", function()
    local buf = buffer.copy("\"This is not too good\", he said.")
    local s = stream(buf)

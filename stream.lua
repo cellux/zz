@@ -262,7 +262,7 @@ function Stream:match(pattern)
          break
       end
       buf:append(chunk)
-      local m, is_partial = pattern:match(buf, startoffset, re.PARTIAL)
+      local m, is_partial = pattern:match(buf, startoffset, bit.bor(re.PARTIAL, re.NOTEMPTY))
       if m then
          local match, lo, hi = m:group(0)
          if is_partial then
