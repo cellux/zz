@@ -12,7 +12,7 @@ local function ReadBuffer()
    local offset = 0
    return {
       length = function(self)
-         return buf.len - offset
+         return tonumber(buf.len - offset)
       end,
       ptr = function(self)
          return buf.ptr + offset
