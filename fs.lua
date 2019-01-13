@@ -140,21 +140,35 @@ const char * zz_fs_type(mode_t mode);
 /* async worker */
 
 enum {
-  ZZ_ASYNC_FS_LSEEK,
+  ZZ_ASYNC_FS_OPEN,
   ZZ_ASYNC_FS_READ,
   ZZ_ASYNC_FS_WRITE,
+  ZZ_ASYNC_FS_LSEEK,
   ZZ_ASYNC_FS_CLOSE,
+  ZZ_ASYNC_FS_FUTIMENS,
+  ZZ_ASYNC_FS_ACCESS,
+  ZZ_ASYNC_FS_CHMOD,
+  ZZ_ASYNC_FS_UNLINK,
+  ZZ_ASYNC_FS_MKDIR,
+  ZZ_ASYNC_FS_RMDIR,
+  ZZ_ASYNC_FS_SYMLINK,
+  ZZ_ASYNC_FS_READLINK,
+  ZZ_ASYNC_FS_REALPATH,
   ZZ_ASYNC_FS_STAT,
-  ZZ_ASYNC_FS_LSTAT
+  ZZ_ASYNC_FS_LSTAT,
+  ZZ_ASYNC_FS_OPENDIR,
+  ZZ_ASYNC_FS_READDIR,
+  ZZ_ASYNC_FS_CLOSEDIR,
+  ZZ_ASYNC_FS_GLOB
 };
 
 void *zz_async_fs_handlers[];
 
-struct zz_async_fs_lseek {
-  int fd;
-  off_t offset;
-  int whence;
-  off_t rv;
+struct zz_async_fs_open {
+  char *file;
+  int oflag;
+  mode_t mode;
+  int rv;
 };
 
 struct zz_async_fs_read_write {
@@ -164,14 +178,84 @@ struct zz_async_fs_read_write {
   ssize_t nbytes;
 };
 
+struct zz_async_fs_lseek {
+  int fd;
+  off_t offset;
+  int whence;
+  off_t rv;
+};
+
 struct zz_async_fs_close {
   int fd;
   int rv;
 };
 
+struct zz_async_fs_futimens {
+  int fd;
+  struct timespec *times;
+  int rv;
+};
+
+struct zz_async_fs_access {
+  char *path;
+  int how;
+  int rv;
+};
+
+struct zz_async_fs_chmod {
+  char *file;
+  mode_t mode;
+  int rv;
+};
+
+struct zz_async_fs_unlink {
+  char *filename;
+  int rv;
+};
+
+struct zz_async_fs_mkdir_rmdir {
+  char *file;
+  mode_t mode;
+  int rv;
+};
+
+struct zz_async_fs_symlink {
+  char *oldname;
+  char *newname;
+  int rv;
+};
+
+struct zz_async_fs_readlink {
+  char *filename;
+  char *buffer;
+  size_t size;
+  ssize_t rv;
+};
+
+struct zz_async_fs_realpath {
+  char *name;
+  char *resolved;
+  char *rv;
+};
+
 struct zz_async_fs_stat {
   char *path;
   struct stat *buf;
+  int rv;
+};
+
+struct zz_async_fs_opendir_readdir_closedir {
+  char *path;
+  DIR *dir;
+  struct dirent *dirent;
+  int rv;
+};
+
+struct zz_async_fs_glob {
+  char *pattern;
+  int flags;
+  int (*errfunc) (const char *, int);
+  glob_t *pglob;
   int rv;
 };
 
@@ -302,7 +386,18 @@ local M = {}
 function M.open(path, flags, mode)
    flags = flags or ffi.C.O_RDONLY
    mode = mode or util.oct("666")
-   local fd = ffi.C.open(path, flags, mode)
+   local fd
+   if sched.ticking() then
+      fd = mm.with_block("struct zz_async_fs_open", nil, function(req, block_size)
+         req.file = ffi.cast("char*", path)
+         req.oflag = flags
+         req.mode = mode
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_OPEN, req)
+         return req.rv
+      end)
+   else
+      fd = ffi.C.open(path, flags, mode)
+   end
    if fd == -1 then
       error(sf("open(%s) failed: %s", path, errno.strerror()), 2)
    else
@@ -337,7 +432,18 @@ function M.touch(path)
                          ffi.C.O_NONBLOCK,
                          ffi.C.O_LARGEFILE)
    local f = M.open(path, flags)
-   util.check_errno("futimens", ffi.C.futimens(f.fd, nil))
+   local rv
+   if sched.ticking() then
+      rv = mm.with_block("struct zz_async_fs_futimens", nil, function(req, block_size)
+         req.fd = f.fd
+         req.times = ffi.cast("struct timespec*", nil)
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_FUTIMENS, req)
+         return req.rv
+      end)
+   else
+      rv = ffi.C.futimens(f.fd, nil)
+   end
+   util.check_errno("futimens", rv)
    f:close()
 end
 
@@ -484,7 +590,16 @@ local Stat = ffi.metatype("struct zz_fs_Stat_ct", Stat_mt)
 local Dir_mt = {}
 
 function Dir_mt:read()
-   local entry = ffi.C.readdir(self.dir)
+   local entry
+   if sched.ticking() then
+      entry = mm.with_block("struct zz_async_fs_opendir_readdir_closedir", nil, function(req, block_size)
+         req.dir = self.dir
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READDIR, req)
+         return req.dirent
+      end)
+   else
+      entry = ffi.C.readdir(self.dir)
+   end
    if entry ~= nil then
       return ffi.string(ffi.C.zz_fs_dirent_name(entry))
    else
@@ -494,7 +609,17 @@ end
 
 function Dir_mt:close()
    if self.dir ~= nil then
-      util.check_ok("closedir", 0, ffi.C.closedir(self.dir))
+      local rv
+      if sched.ticking() then
+         rv = mm.with_block("struct zz_async_fs_opendir_readdir_closedir", nil, function(req, block_size)
+            req.dir = self.dir
+            async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSEDIR, req)
+            return req.rv
+         end)
+      else
+         rv = ffi.C.closedir(self.dir)
+      end
+      util.check_ok("closedir", 0, rv)
       self.dir = nil
    end
    return 0
@@ -506,7 +631,17 @@ Dir_mt.__gc = Dir_mt.close
 local Dir = ffi.metatype("struct zz_fs_Dir_ct", Dir_mt)
 
 function M.opendir(path)
-   return Dir(util.check_bad("opendir", nil, ffi.C.opendir(path)))
+   local dir
+   if sched.ticking() then
+      dir = mm.with_block("struct zz_async_fs_opendir_readdir_closedir", nil, function(req, block_size)
+         req.path = ffi.cast("char*", path)
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_OPENDIR, req)
+         return req.dir
+      end)
+   else
+      dir = ffi.C.opendir(path)
+   end
+   return Dir(util.check_bad("opendir", nil, dir))
 end
 
 function M.readdir(path)
@@ -521,20 +656,35 @@ function M.readdir(path)
    return next
 end
 
+local function access(path, how)
+   local rv
+   if sched.ticking() then
+      rv = mm.with_block("struct zz_async_fs_access", nil, function(req, block_size)
+         req.path = ffi.cast("char*", path)
+         req.how = how
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_ACCESS, req)
+         return req.rv
+      end)
+   else
+      rv = ffi.C.access(path, how)
+   end
+   return rv
+end
+
 function M.exists(path)
-   return ffi.C.access(path, ffi.C.F_OK) == 0
+   return access(path, ffi.C.F_OK) == 0
 end
 
 function M.is_readable(path)
-   return ffi.C.access(path, ffi.C.R_OK) == 0
+   return access(path, ffi.C.R_OK) == 0
 end
 
 function M.is_writable(path)
-   return ffi.C.access(path, ffi.C.W_OK) == 0
+   return access(path, ffi.C.W_OK) == 0
 end
 
 function M.is_executable(path)
-   return ffi.C.access(path, ffi.C.X_OK) == 0
+   return access(path, ffi.C.X_OK) == 0
 end
 
 function M.stat(path)
@@ -575,28 +725,98 @@ create_type_checker("fifo")
 create_type_checker("sock")
 
 function M.chmod(path, mode)
-   return util.check_errno("chmod", ffi.C.chmod(path, mode))
+   local rv
+   if sched.ticking() then
+      rv = mm.with_block("struct zz_async_fs_chmod", nil, function(req, block_size)
+         req.file = ffi.cast("char*", path)
+         req.mode = mode
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CHMOD, req)
+         return req.rv
+      end)
+   else
+      rv = ffi.C.chmod(path, mode)
+   end
+   -- TODO: errno can change while we get here
+   return util.check_errno("chmod", rv)
 end
 
 function M.unlink(path)
-   return util.check_errno("unlink", ffi.C.unlink(path))
+   local rv
+   if sched.ticking() then
+      rv = mm.with_block("struct zz_async_fs_unlink", nil, function(req, block_size)
+         req.filename = ffi.cast("char*", path)
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_UNLINK, req)
+         return req.rv
+      end)
+   else
+      rv = ffi.C.unlink(path)
+   end
+   -- TODO: errno can change while we get here
+   return util.check_errno("unlink", rv)
 end
 
 function M.mkdir(path, mode)
-   return util.check_errno("mkdir", ffi.C.mkdir(path, mode or util.oct("777")))
+   mode = mode or util.oct("777")
+   local rv
+   if sched.ticking() then
+      rv = mm.with_block("struct zz_async_fs_mkdir_rmdir", nil, function(req, block_size)
+         req.file = ffi.cast("char*", path)
+         req.mode = mode
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_MKDIR, req)
+         return req.rv
+      end)
+   else
+      rv = ffi.C.mkdir(path, mode)
+   end
+   -- TODO: errno can change while we get here
+   return util.check_errno("mkdir", rv)
 end
 
 function M.rmdir(path)
-   return util.check_errno("rmdir", ffi.C.rmdir(path))
+   local rv
+   if sched.ticking() then
+      rv = mm.with_block("struct zz_async_fs_mkdir_rmdir", nil, function(req, block_size)
+         req.file = ffi.cast("char*", path)
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_RMDIR, req)
+         return req.rv
+      end)
+   else
+      rv = ffi.C.rmdir(path)
+   end
+   -- TODO: errno can change while we get here
+   return util.check_errno("rmdir", rv)
 end
 
 function M.symlink(oldname, newname)
-   return util.check_errno("symlink", ffi.C.symlink(oldname, newname))
+   local rv
+   if sched.ticking() then
+      rv = mm.with_block("struct zz_async_fs_symlink", nil, function(req, block_size)
+         req.oldname = ffi.cast("char*", oldname)
+         req.newname = ffi.cast("char*", newname)
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_SYMLINK, req)
+         return req.rv
+      end)
+   else
+      rv = ffi.C.symlink(oldname, newname)
+   end
+   -- TODO: errno can change while we get here
+   return util.check_errno("symlink", rv)
 end
 
 function M.readlink(filename)
    return mm.with_block(PATH_MAX, nil, function(buf, block_size)
-      local size = ffi.C.readlink(filename, buf, PATH_MAX)
+      local size
+      if sched.ticking() then
+         size = mm.with_block("struct zz_async_fs_readlink", nil, function(req, block_size)
+            req.filename = ffi.cast("char*", filename)
+            req.buffer = buf
+            req.size = PATH_MAX
+            async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READLINK, req)
+            return req.rv
+         end)
+      else
+         size = ffi.C.readlink(filename, buf, PATH_MAX)
+      end
       if size == PATH_MAX then
          ef("readlink: buffer overflow for filename: %s", filename)
       end
@@ -605,7 +825,17 @@ function M.readlink(filename)
 end
 
 function M.realpath(name)
-   local ptr = ffi.C.realpath(name, nil)
+   local ptr
+   if sched.ticking() then
+      ptr = mm.with_block("struct zz_async_fs_realpath", nil, function(req, block_size)
+         req.name = ffi.cast("char*", name)
+         req.resolved = nil
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_REALPATH, req)
+         return req.rv
+      end)
+   else
+      ptr = ffi.C.realpath(name, nil)
+   end
    if ptr ~= nil then
       local rv = ffi.string(ptr)
       ffi.C.free(ptr)
@@ -762,7 +992,19 @@ function M.glob(pattern, flags)
                    ffi.C.GLOB_BRACE,
                    ffi.C.GLOB_TILDE_CHECK)
    return mm.with_block("glob_t", nil, function(pglob, block_size)
-      local status = ffi.C.glob(pattern, flags, nil, pglob)
+      local status
+      if sched.ticking() then
+         status = mm.with_block("struct zz_async_fs_glob", nil, function(req, block_size)
+            req.pattern = ffi.cast("char*", pattern)
+            req.flags = flags
+            req.errfunc = nil
+            req.pglob = pglob
+            async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_GLOB, req)
+            return req.rv
+         end)
+      else
+         status = ffi.C.glob(pattern, flags, nil, pglob)
+      end
       local rv = {}
       if status == 0 then
          for i=1,tonumber(pglob.gl_pathc) do
