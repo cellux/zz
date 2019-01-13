@@ -94,16 +94,16 @@ function Stream:read1(ptr, size)
    local bytes_read = 0
    local bytes_left = size
    local dst = ffi.cast("uint8_t*", ptr)
-   local read_buffer_length = self.read_buffer:length()
-   if read_buffer_length > 0 then
-      if read_buffer_length > size then
+   local rbl = self.read_buffer:length()
+   if rbl > 0 then
+      if rbl > size then
          ffi.copy(dst, self.read_buffer:ptr(), size)
          self.read_buffer:consume(size)
          bytes_read = size
          bytes_left = 0
       else
-         ffi.copy(dst, self.read_buffer:ptr(), read_buffer_length)
-         bytes_read = read_buffer_length
+         ffi.copy(dst, self.read_buffer:ptr(), rbl)
+         bytes_read = rbl
          bytes_left = size - bytes_read
          self.read_buffer:clear()
       end
@@ -136,11 +136,11 @@ function Stream:read(n)
       buf = buffer.new(n)
       local bytes_left = n
       while not self:eof() and bytes_left > 0 do
-         local read_buffer_length = self.read_buffer:length()
-         if read_buffer_length > 0 then
-            if read_buffer_length <= bytes_left then
-               buf:append(self.read_buffer:ptr(), read_buffer_length)
-               bytes_left = bytes_left - read_buffer_length
+         local rbl = self.read_buffer:length()
+         if rbl > 0 then
+            if rbl <= bytes_left then
+               buf:append(self.read_buffer:ptr(), rbl)
+               bytes_left = bytes_left - rbl
                self.read_buffer:clear()
             else
                buf:append(self.read_buffer:ptr(), bytes_left)
@@ -158,10 +158,10 @@ function Stream:read(n)
       -- read until EOF
       local buffers = {}
       local nbytes_total = 0
-      local read_buffer_length = self.read_buffer:length()
-      if read_buffer_length > 0 then
+      local rbl = self.read_buffer:length()
+      if rbl > 0 then
          table.insert(buffers, self.read_buffer:get())
-         nbytes_total = nbytes_total + read_buffer_length
+         nbytes_total = nbytes_total + rbl
       end
       mm.with_block(READ_BLOCK_SIZE, nil, function(ptr, block_size)
          while not self:eof() do
