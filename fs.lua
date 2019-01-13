@@ -164,99 +164,101 @@ enum {
 
 void *zz_async_fs_handlers[];
 
-struct zz_async_fs_open {
-  char *file;
-  int oflag;
-  mode_t mode;
-  int rv;
-};
+union zz_async_fs_req {
+  struct {
+    char *file;
+    int oflag;
+    mode_t mode;
+    int rv;
+  } open;
 
-struct zz_async_fs_read_write {
-  int fd;
-  void *buf;
-  size_t count;
-  ssize_t nbytes;
-};
+  struct {
+    int fd;
+    void *buf;
+    size_t count;
+    ssize_t nbytes;
+  } read, write;
 
-struct zz_async_fs_lseek {
-  int fd;
-  off_t offset;
-  int whence;
-  off_t rv;
-};
+  struct {
+    int fd;
+    off_t offset;
+    int whence;
+    off_t rv;
+  } lseek;
 
-struct zz_async_fs_close {
-  int fd;
-  int rv;
-};
+  struct {
+    int fd;
+    int rv;
+  } close;
 
-struct zz_async_fs_futimens {
-  int fd;
-  struct timespec *times;
-  int rv;
-};
+  struct {
+    int fd;
+    struct timespec *times;
+    int rv;
+  } futimens;
 
-struct zz_async_fs_access {
-  char *path;
-  int how;
-  int rv;
-};
+  struct {
+    char *path;
+    int how;
+    int rv;
+  } access;
 
-struct zz_async_fs_chmod {
-  char *file;
-  mode_t mode;
-  int rv;
-};
+  struct {
+    char *file;
+    mode_t mode;
+    int rv;
+  } chmod;
 
-struct zz_async_fs_unlink {
-  char *filename;
-  int rv;
-};
+  struct {
+    char *filename;
+    int rv;
+  } unlink;
 
-struct zz_async_fs_mkdir_rmdir {
-  char *file;
-  mode_t mode;
-  int rv;
-};
+  struct {
+    char *file;
+    mode_t mode;
+    int rv;
+  } mkdir, rmdir;
 
-struct zz_async_fs_symlink {
-  char *oldname;
-  char *newname;
-  int rv;
-};
+  struct {
+    char *oldname;
+    char *newname;
+    int rv;
+  } symlink;
 
-struct zz_async_fs_readlink {
-  char *filename;
-  char *buffer;
-  size_t size;
-  ssize_t rv;
-};
+  struct {
+    char *filename;
+    char *buffer;
+    size_t size;
+    ssize_t rv;
+  } readlink;
 
-struct zz_async_fs_realpath {
-  char *name;
-  char *resolved;
-  char *rv;
-};
+  struct {
+    char *name;
+    char *resolved;
+    char *rv;
+  } realpath;
 
-struct zz_async_fs_stat {
-  char *path;
-  struct stat *buf;
-  int rv;
-};
+  struct {
+    char *path;
+    struct stat *buf;
+    int rv;
+  } stat;
 
-struct zz_async_fs_opendir_readdir_closedir {
-  char *path;
-  DIR *dir;
-  struct dirent *dirent;
-  int rv;
-};
+  struct {
+    char *path;
+    DIR *dir;
+    struct dirent *dirent;
+    int rv;
+  } opendir, readdir, closedir;
 
-struct zz_async_fs_glob {
-  char *pattern;
-  int flags;
-  int (*errfunc) (const char *, int);
-  glob_t *pglob;
-  int rv;
+  struct {
+    char *pattern;
+    int flags;
+    int (*errfunc) (const char *, int);
+    glob_t *pglob;
+    int rv;
+  } glob;
 };
 
 ]]
@@ -270,12 +272,12 @@ local File_mt = {}
 local function lseek(fd, offset, whence)
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_lseek", nil, function(req, block_size)
-         req.fd = fd
-         req.offset = offset
-         req.whence = whence
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.lseek.fd = fd
+         req.lseek.offset = offset
+         req.lseek.whence = whence
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSEEK, req)
-         return req.rv
+         return req.lseek.rv
       end)
    else
       rv = ffi.C.lseek(fd, offset, whence)
@@ -297,12 +299,12 @@ end
 function File_mt:read1(ptr, size)
    local nbytes
    if sched.ticking() then
-      mm.with_block("struct zz_async_fs_read_write", nil, function(req, block_size)
-         req.fd = self.fd
-         req.buf = ptr
-         req.count = size
+      mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.read.fd = self.fd
+         req.read.buf = ptr
+         req.read.count = size
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READ, req)
-         nbytes = req.nbytes
+         nbytes = req.read.nbytes
       end)
    else
       nbytes = ffi.C.read(self.fd, ptr, size)
@@ -313,12 +315,12 @@ end
 function File_mt:write1(ptr, size)
    local nbytes
    if sched.ticking() then
-      mm.with_block("struct zz_async_fs_read_write", nil, function(req, block_size)
-         req.fd = self.fd
-         req.buf = ptr
-         req.count = size
+      mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.write.fd = self.fd
+         req.write.buf = ptr
+         req.write.count = size
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_WRITE, req)
-         nbytes = req.nbytes
+         nbytes = req.write.nbytes
       end)
    else
       nbytes = ffi.C.write(self.fd, ptr, size)
@@ -340,10 +342,10 @@ function File_mt:close()
    if self.fd >= 0 then
       local rv
       if sched.ticking() then
-         rv = mm.with_block("struct zz_async_fs_close", nil, function(req, block_size)
-            req.fd = self.fd
+         rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+            req.close.fd = self.fd
             async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSE, req)
-            return req.rv
+            return req.close.rv
          end)
       else
          rv = ffi.C.close(self.fd)
@@ -388,12 +390,12 @@ function M.open(path, flags, mode)
    mode = mode or util.oct("666")
    local fd
    if sched.ticking() then
-      fd = mm.with_block("struct zz_async_fs_open", nil, function(req, block_size)
-         req.file = ffi.cast("char*", path)
-         req.oflag = flags
-         req.mode = mode
+      fd = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.open.file = ffi.cast("char*", path)
+         req.open.oflag = flags
+         req.open.mode = mode
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_OPEN, req)
-         return req.rv
+         return req.open.rv
       end)
    else
       fd = ffi.C.open(path, flags, mode)
@@ -434,11 +436,11 @@ function M.touch(path)
    local f = M.open(path, flags)
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_futimens", nil, function(req, block_size)
-         req.fd = f.fd
-         req.times = ffi.cast("struct timespec*", nil)
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.futimens.fd = f.fd
+         req.futimens.times = ffi.cast("struct timespec*", nil)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_FUTIMENS, req)
-         return req.rv
+         return req.futimens.rv
       end)
    else
       rv = ffi.C.futimens(f.fd, nil)
@@ -487,11 +489,11 @@ local Stat_mt = {}
 
 function Stat_mt:stat(path)
    if sched.ticking() then
-      return mm.with_block("struct zz_async_fs_stat", nil, function(req, block_size)
-         req.path = ffi.cast("char*", path)
-         req.buf = self.buf
+      return mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.stat.path = ffi.cast("char*", path)
+         req.stat.buf = self.buf
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_STAT, req)
-         return req.rv
+         return req.stat.rv
       end)
    else
       return ffi.C.zz_fs_stat(path, self.buf)
@@ -500,11 +502,11 @@ end
 
 function Stat_mt:lstat(path)
    if sched.ticking() then
-      return mm.with_block("struct zz_async_fs_stat", nil, function(req, block_size)
-         req.path = ffi.cast("char*", path)
-         req.buf = self.buf
+      return mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.stat.path = ffi.cast("char*", path)
+         req.stat.buf = self.buf
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSTAT, req)
-         return req.rv
+         return req.stat.rv
       end)
    else
       return ffi.C.zz_fs_lstat(path, self.buf)
@@ -592,10 +594,10 @@ local Dir_mt = {}
 function Dir_mt:read()
    local entry
    if sched.ticking() then
-      entry = mm.with_block("struct zz_async_fs_opendir_readdir_closedir", nil, function(req, block_size)
-         req.dir = self.dir
+      entry = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.readdir.dir = self.dir
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READDIR, req)
-         return req.dirent
+         return req.readdir.dirent
       end)
    else
       entry = ffi.C.readdir(self.dir)
@@ -611,10 +613,10 @@ function Dir_mt:close()
    if self.dir ~= nil then
       local rv
       if sched.ticking() then
-         rv = mm.with_block("struct zz_async_fs_opendir_readdir_closedir", nil, function(req, block_size)
-            req.dir = self.dir
+         rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+            req.closedir.dir = self.dir
             async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSEDIR, req)
-            return req.rv
+            return req.closedir.rv
          end)
       else
          rv = ffi.C.closedir(self.dir)
@@ -633,10 +635,10 @@ local Dir = ffi.metatype("struct zz_fs_Dir_ct", Dir_mt)
 function M.opendir(path)
    local dir
    if sched.ticking() then
-      dir = mm.with_block("struct zz_async_fs_opendir_readdir_closedir", nil, function(req, block_size)
-         req.path = ffi.cast("char*", path)
+      dir = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.opendir.path = ffi.cast("char*", path)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_OPENDIR, req)
-         return req.dir
+         return req.opendir.dir
       end)
    else
       dir = ffi.C.opendir(path)
@@ -659,11 +661,11 @@ end
 local function access(path, how)
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_access", nil, function(req, block_size)
-         req.path = ffi.cast("char*", path)
-         req.how = how
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.access.path = ffi.cast("char*", path)
+         req.access.how = how
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_ACCESS, req)
-         return req.rv
+         return req.access.rv
       end)
    else
       rv = ffi.C.access(path, how)
@@ -727,11 +729,11 @@ create_type_checker("sock")
 function M.chmod(path, mode)
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_chmod", nil, function(req, block_size)
-         req.file = ffi.cast("char*", path)
-         req.mode = mode
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.chmod.file = ffi.cast("char*", path)
+         req.chmod.mode = mode
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CHMOD, req)
-         return req.rv
+         return req.chmod.rv
       end)
    else
       rv = ffi.C.chmod(path, mode)
@@ -743,10 +745,10 @@ end
 function M.unlink(path)
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_unlink", nil, function(req, block_size)
-         req.filename = ffi.cast("char*", path)
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.unlink.filename = ffi.cast("char*", path)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_UNLINK, req)
-         return req.rv
+         return req.unlink.rv
       end)
    else
       rv = ffi.C.unlink(path)
@@ -759,11 +761,11 @@ function M.mkdir(path, mode)
    mode = mode or util.oct("777")
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_mkdir_rmdir", nil, function(req, block_size)
-         req.file = ffi.cast("char*", path)
-         req.mode = mode
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.mkdir.file = ffi.cast("char*", path)
+         req.mkdir.mode = mode
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_MKDIR, req)
-         return req.rv
+         return req.mkdir.rv
       end)
    else
       rv = ffi.C.mkdir(path, mode)
@@ -775,10 +777,10 @@ end
 function M.rmdir(path)
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_mkdir_rmdir", nil, function(req, block_size)
-         req.file = ffi.cast("char*", path)
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.rmdir.file = ffi.cast("char*", path)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_RMDIR, req)
-         return req.rv
+         return req.rmdir.rv
       end)
    else
       rv = ffi.C.rmdir(path)
@@ -790,11 +792,11 @@ end
 function M.symlink(oldname, newname)
    local rv
    if sched.ticking() then
-      rv = mm.with_block("struct zz_async_fs_symlink", nil, function(req, block_size)
-         req.oldname = ffi.cast("char*", oldname)
-         req.newname = ffi.cast("char*", newname)
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.symlink.oldname = ffi.cast("char*", oldname)
+         req.symlink.newname = ffi.cast("char*", newname)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_SYMLINK, req)
-         return req.rv
+         return req.symlink.rv
       end)
    else
       rv = ffi.C.symlink(oldname, newname)
@@ -807,12 +809,12 @@ function M.readlink(filename)
    return mm.with_block(PATH_MAX, nil, function(buf, block_size)
       local size
       if sched.ticking() then
-         size = mm.with_block("struct zz_async_fs_readlink", nil, function(req, block_size)
-            req.filename = ffi.cast("char*", filename)
-            req.buffer = buf
-            req.size = PATH_MAX
+         size = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+            req.readlink.filename = ffi.cast("char*", filename)
+            req.readlink.buffer = buf
+            req.readlink.size = PATH_MAX
             async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READLINK, req)
-            return req.rv
+            return req.readlink.rv
          end)
       else
          size = ffi.C.readlink(filename, buf, PATH_MAX)
@@ -827,11 +829,11 @@ end
 function M.realpath(name)
    local ptr
    if sched.ticking() then
-      ptr = mm.with_block("struct zz_async_fs_realpath", nil, function(req, block_size)
-         req.name = ffi.cast("char*", name)
-         req.resolved = nil
+      ptr = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.realpath.name = ffi.cast("char*", name)
+         req.realpath.resolved = nil
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_REALPATH, req)
-         return req.rv
+         return req.realpath.rv
       end)
    else
       ptr = ffi.C.realpath(name, nil)
@@ -994,13 +996,13 @@ function M.glob(pattern, flags)
    return mm.with_block("glob_t", nil, function(pglob, block_size)
       local status
       if sched.ticking() then
-         status = mm.with_block("struct zz_async_fs_glob", nil, function(req, block_size)
-            req.pattern = ffi.cast("char*", pattern)
-            req.flags = flags
-            req.errfunc = nil
-            req.pglob = pglob
+         status = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+            req.glob.pattern = ffi.cast("char*", pattern)
+            req.glob.flags = flags
+            req.glob.errfunc = nil
+            req.glob.pglob = pglob
             async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_GLOB, req)
-            return req.rv
+            return req.glob.rv
          end)
       else
          status = ffi.C.glob(pattern, flags, nil, pglob)

@@ -30,134 +30,157 @@ enum {
   ZZ_ASYNC_FS_GLOB
 };
 
-struct zz_async_fs_open {
-  char *file;
-  int oflag;
-  mode_t mode;
-  int rv;
+union zz_async_fs_req {
+  struct {
+    char *file;
+    int oflag;
+    mode_t mode;
+    int rv;
+  } open;
+
+  struct {
+    int fd;
+    void *buf;
+    size_t count;
+    ssize_t nbytes;
+  } read, write;
+
+  struct {
+    int fd;
+    off_t offset;
+    int whence;
+    off_t rv;
+  } lseek;
+
+  struct {
+    int fd;
+    int rv;
+  } close;
+
+  struct {
+    int fd;
+    struct timespec *times;
+    int rv;
+  } futimens;
+
+  struct {
+    char *path;
+    int how;
+    int rv;
+  } access;
+
+  struct {
+    char *file;
+    mode_t mode;
+    int rv;
+  } chmod;
+
+  struct {
+    char *filename;
+    int rv;
+  } unlink;
+
+  struct {
+    char *file;
+    mode_t mode;
+    int rv;
+  } mkdir, rmdir;
+
+  struct {
+    char *oldname;
+    char *newname;
+    int rv;
+  } symlink;
+
+  struct {
+    char *filename;
+    char *buffer;
+    size_t size;
+    ssize_t rv;
+  } readlink;
+
+  struct {
+    char *name;
+    char *resolved;
+    char *rv;
+  } realpath;
+
+  struct {
+    char *path;
+    struct stat *buf;
+    int rv;
+  } stat;
+
+  struct {
+    char *path;
+    DIR *dir;
+    struct dirent *dirent;
+    int rv;
+  } opendir, readdir, closedir;
+
+  struct {
+    char *pattern;
+    int flags;
+    int (*errfunc) (const char *, int);
+    glob_t *pglob;
+    int rv;
+  } glob;
 };
 
-void zz_async_fs_open(struct zz_async_fs_open *req) {
-  req->rv = open(req->file, req->oflag, req->mode);
+void zz_async_fs_open(union zz_async_fs_req *req) {
+  req->open.rv = open(req->open.file, req->open.oflag, req->open.mode);
 }
 
-struct zz_async_fs_read_write {
-  int fd;
-  void *buf;
-  size_t count;
-  ssize_t nbytes;
-};
-
-void zz_async_fs_read(struct zz_async_fs_read_write *req) {
-  req->nbytes = read(req->fd, req->buf, req->count);
+void zz_async_fs_read(union zz_async_fs_req *req) {
+  req->read.nbytes = read(req->read.fd, req->read.buf, req->read.count);
 }
 
-void zz_async_fs_write(struct zz_async_fs_read_write *req) {
-  req->nbytes = write(req->fd, req->buf, req->count);
+void zz_async_fs_write(union zz_async_fs_req *req) {
+  req->write.nbytes = write(req->write.fd, req->write.buf, req->write.count);
 }
 
-struct zz_async_fs_lseek {
-  int fd;
-  off_t offset;
-  int whence;
-  off_t rv;
-};
-
-void zz_async_fs_lseek(struct zz_async_fs_lseek *req) {
-  req->rv = lseek(req->fd, req->offset, req->whence);
+void zz_async_fs_lseek(union zz_async_fs_req *req) {
+  req->lseek.rv = lseek(req->lseek.fd, req->lseek.offset, req->lseek.whence);
 }
 
-struct zz_async_fs_close {
-  int fd;
-  int rv;
-};
-
-void zz_async_fs_close(struct zz_async_fs_close *req) {
-  req->rv = close(req->fd);
+void zz_async_fs_close(union zz_async_fs_req *req) {
+  req->close.rv = close(req->close.fd);
 }
 
-struct zz_async_fs_futimens {
-  int fd;
-  struct timespec *times;
-  int rv;
-};
-
-void zz_async_fs_futimens(struct zz_async_fs_futimens *req) {
-  req->rv = futimens(req->fd, req->times);
+void zz_async_fs_futimens(union zz_async_fs_req *req) {
+  req->futimens.rv = futimens(req->futimens.fd, req->futimens.times);
 }
 
-struct zz_async_fs_access {
-  char *path;
-  int how;
-  int rv;
-};
-
-void zz_async_fs_access(struct zz_async_fs_access *req) {
-  req->rv = access(req->path, req->how);
+void zz_async_fs_access(union zz_async_fs_req *req) {
+  req->access.rv = access(req->access.path, req->access.how);
 }
 
-struct zz_async_fs_chmod {
-  char *file;
-  mode_t mode;
-  int rv;
-};
-
-void zz_async_fs_chmod(struct zz_async_fs_chmod *req) {
-  req->rv = chmod(req->file, req->mode);
+void zz_async_fs_chmod(union zz_async_fs_req *req) {
+  req->chmod.rv = chmod(req->chmod.file, req->chmod.mode);
 }
 
-struct zz_async_fs_unlink {
-  char *filename;
-  int rv;
-};
-
-void zz_async_fs_unlink(struct zz_async_fs_unlink *req) {
-  req->rv = unlink(req->filename);
+void zz_async_fs_unlink(union zz_async_fs_req *req) {
+  req->unlink.rv = unlink(req->unlink.filename);
 }
 
-struct zz_async_fs_mkdir_rmdir {
-  char *file;
-  mode_t mode;
-  int rv;
-};
-
-void zz_async_fs_mkdir(struct zz_async_fs_mkdir_rmdir *req) {
-  req->rv = mkdir(req->file, req->mode);
+void zz_async_fs_mkdir(union zz_async_fs_req *req) {
+  req->mkdir.rv = mkdir(req->mkdir.file, req->mkdir.mode);
 }
 
-void zz_async_fs_rmdir(struct zz_async_fs_mkdir_rmdir *req) {
-  req->rv = rmdir(req->file);
+void zz_async_fs_rmdir(union zz_async_fs_req *req) {
+  req->rmdir.rv = rmdir(req->rmdir.file);
 }
 
-struct zz_async_fs_symlink {
-  char *oldname;
-  char *newname;
-  int rv;
-};
-
-void zz_async_fs_symlink(struct zz_async_fs_symlink *req) {
-  req->rv = symlink(req->oldname, req->newname);
+void zz_async_fs_symlink(union zz_async_fs_req *req) {
+  req->symlink.rv = symlink(req->symlink.oldname, req->symlink.newname);
 }
 
-struct zz_async_fs_readlink {
-  char *filename;
-  char *buffer;
-  size_t size;
-  ssize_t rv;
-};
-
-void zz_async_fs_readlink(struct zz_async_fs_readlink *req) {
-  req->rv = readlink(req->filename, req->buffer, req->size);
+void zz_async_fs_readlink(union zz_async_fs_req *req) {
+  req->readlink.rv = readlink(req->readlink.filename, req->readlink.buffer, req->readlink.size);
 }
 
-struct zz_async_fs_realpath {
-  char *name;
-  char *resolved;
-  char *rv;
-};
-
-void zz_async_fs_realpath(struct zz_async_fs_realpath *req) {
-  req->rv = realpath(req->name, req->resolved);
+void zz_async_fs_realpath(union zz_async_fs_req *req) {
+  req->realpath.rv = realpath(req->realpath.name, req->realpath.resolved);
 }
 
 struct stat * zz_fs_Stat_new() {
@@ -216,49 +239,28 @@ const char * zz_fs_type(mode_t mode) {
     return NULL;
 }
 
-struct zz_async_fs_stat {
-  char *path;
-  struct stat *buf;
-  int rv;
-};
-
-void zz_async_fs_stat(struct zz_async_fs_stat *req) {
-  req->rv = stat(req->path, req->buf);
+void zz_async_fs_stat(union zz_async_fs_req *req) {
+  req->stat.rv = stat(req->stat.path, req->stat.buf);
 }
 
-void zz_async_fs_lstat(struct zz_async_fs_stat *req) {
-  req->rv = lstat(req->path, req->buf);
+void zz_async_fs_lstat(union zz_async_fs_req *req) {
+  req->stat.rv = lstat(req->stat.path, req->stat.buf);
 }
 
-struct zz_async_fs_opendir_readdir_closedir {
-  char *path;
-  DIR *dir;
-  struct dirent *dirent;
-  int rv;
-};
-
-void zz_async_fs_opendir(struct zz_async_fs_opendir_readdir_closedir *req) {
-  req->dir = opendir(req->path);
+void zz_async_fs_opendir(union zz_async_fs_req *req) {
+  req->opendir.dir = opendir(req->opendir.path);
 }
 
-void zz_async_fs_readdir(struct zz_async_fs_opendir_readdir_closedir *req) {
-  req->dirent = readdir(req->dir);
+void zz_async_fs_readdir(union zz_async_fs_req *req) {
+  req->readdir.dirent = readdir(req->readdir.dir);
 }
 
-void zz_async_fs_closedir(struct zz_async_fs_opendir_readdir_closedir *req) {
-  req->rv = closedir(req->dir);
+void zz_async_fs_closedir(union zz_async_fs_req *req) {
+  req->closedir.rv = closedir(req->closedir.dir);
 }
 
-struct zz_async_fs_glob {
-  char *pattern;
-  int flags;
-  int (*errfunc) (const char *, int);
-  glob_t *pglob;
-  int rv;
-};
-
-void zz_async_fs_glob(struct zz_async_fs_glob *req) {
-  req->rv = glob(req->pattern, req->flags, req->errfunc, req->pglob);
+void zz_async_fs_glob(union zz_async_fs_req *req) {
+  req->glob.rv = glob(req->glob.pattern, req->glob.flags, req->glob.errfunc, req->glob.pglob);
 }
 
 void *zz_async_fs_handlers[] = {

@@ -62,11 +62,13 @@ enum {
   ZZ_ASYNC_PROCESS_WAITPID
 };
 
-struct zz_async_process_waitpid {
-  pid_t pid;
-  int status;
-  int options;
-  pid_t rv;
+union zz_async_process_req {
+  struct {
+    pid_t pid;
+    int status;
+    int options;
+    pid_t rv;
+  } waitpid;
 };
 
 void *zz_async_process_handlers[];
@@ -138,11 +140,11 @@ function M.waitpid(pid, options)
    options = options or 0
    local rv, status
    if sched.ticking() then
-      mm.with_block("struct zz_async_process_waitpid", nil, function(req, block_size)
-         req.pid = pid
-         req.options = options
+      mm.with_block("union zz_async_process_req", nil, function(req, block_size)
+         req.waitpid.pid = pid
+         req.waitpid.options = options
          async.request(ASYNC_PROCESS, ffi.C.ZZ_ASYNC_PROCESS_WAITPID, req)
-         rv, status = req.rv, req.status
+         rv, status = req.waitpid.rv, req.waitpid.status
       end)
    else
       local _status = ffi.new("int[1]")
