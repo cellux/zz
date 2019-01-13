@@ -64,7 +64,7 @@ LUAJIT_SRC="$LUAJIT_ROOT/src"
 LUAJIT_LIB="$LUAJIT_SRC/libluajit.a"
 LUAJIT_BIN="$LUAJIT_SRC/luajit"
 
-CMP_VER=10
+CMP_VER=18
 CMP_TGZ="cmp-$CMP_VER.tar.gz"
 CMP_URL="https://github.com/camgunz/cmp/archive/v$CMP_VER.tar.gz"
 CMP_DIR="cmp-$CMP_VER"

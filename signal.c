@@ -24,7 +24,7 @@ void *zz_signal_handler_thread(void *arg) {
   cmp_buf.len = 0;
 
   cmp_buffer_state.buffer = &cmp_buf;
-  cmp_init(&cmp_ctx, &cmp_buffer_state, zz_cmp_buffer_reader, zz_cmp_buffer_writer);
+  cmp_init(&cmp_ctx, &cmp_buffer_state, zz_cmp_buffer_reader, zz_cmp_buffer_skipper, zz_cmp_buffer_writer);
 
   event_socket = nn_socket(AF_SP, NN_PUB);
   if (event_socket < 0) {
@@ -54,8 +54,8 @@ void *zz_signal_handler_thread(void *arg) {
     cmp_write_array(&cmp_ctx, 2);
     cmp_write_str(&cmp_ctx, "signal", 6);
     cmp_write_array(&cmp_ctx, 2);
-    cmp_write_sint(&cmp_ctx, signum);
-    cmp_write_sint(&cmp_ctx, siginfo.si_pid);
+    cmp_write_integer(&cmp_ctx, signum);
+    cmp_write_integer(&cmp_ctx, siginfo.si_pid);
     int bytes_sent = nn_send(event_socket,
                              cmp_buf.ptr,
                              cmp_buf.len,
