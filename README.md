@@ -38,14 +38,9 @@ These are either automatically downloaded upon compilation or bundled with the s
 
 Build dependencies:
 
-* bash
-* curl
-* sha1sum
-* awk
-* make
-* gcc
-* binutils
-* cmake
+```
+bash curl sha1sum awk make gcc binutils cmake
+```
 
 How to build:
 
