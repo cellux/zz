@@ -75,7 +75,7 @@ testing("Accumulator", function()
 end)
 
 testing("classes", function()
-   -- a class without a `create' method creates empty tables as instances
+   -- a class without a `new' method creates empty tables as instances
    local A = util.Class()
    local a = A()
    assert.equals(a, {})
@@ -92,9 +92,9 @@ testing("classes", function()
    end
    assert.equals(a:get_x(), 5)
    
-   -- if we define a `create' method, it will be used to create instances
+   -- if we define a `new' method, it will be used to create instances
    local A = util.Class()
-   function A:create(opts)
+   function A:new(opts)
       return opts or {"undefined"}
    end
    function A:f()
@@ -114,7 +114,7 @@ testing("classes", function()
    
    local B = util.Class(A) -- specify the parent as a single argument
    local b = B()
-   assert.equals(b, {"undefined"}) -- create() method inherited from A
+   assert.equals(b, {"undefined"}) -- new() method inherited from A
    assert.equals(b:g(), "hello")
    
    local C = util.Class(B)
@@ -137,7 +137,7 @@ end)
 
 testing("instance metamethods", function()
    local A = util.Class()
-   function A:create()
+   function A:new()
       return {
          a=1, b=3, c=8,
          __call = function(self, x)
@@ -155,7 +155,7 @@ testing("constructor should not override __index", function()
    assert.throws('attempt to override __index metamethod', function()
       local a = A { __index = {} }
    end)
-   function A:create()
+   function A:new()
       return { __index = {} }
    end
    assert.throws('attempt to override __index metamethod', function()

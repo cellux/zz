@@ -61,7 +61,7 @@ M.READ_BLOCK_SIZE = 4096
 
 local Stream = util.Class()
 
-function Stream:create(obj)
+function Stream:new(obj)
    local self = { obj = obj } -- keep reference to prevent GC
    if type(obj) == "string" then
       obj = buffer.wrap(obj)

@@ -5,7 +5,7 @@ local M = {}
 
 local Target = util.Class()
 
-function Target:create(tpath, mp)
+function Target:new(tpath, mp)
    if mp and mp:sub(-1) ~= "/" then
       mp = mp.."/"
    end
@@ -42,7 +42,7 @@ end
 
 local Root = util.Class()
 
-function Root:create()
+function Root:new()
    return {
       targets = {}
    }

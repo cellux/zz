@@ -18,7 +18,7 @@ end
 
 local Test = util.Class()
 
-function Test:create(name, testfn, opts)
+function Test:new(name, testfn, opts)
    return {
       name = name,
       testfn = testfn,
@@ -54,7 +54,7 @@ end
 
 local TestContext = util.Class()
 
-function TestContext:create()
+function TestContext:new()
    return {
       _nextid = 0
    }
@@ -69,7 +69,7 @@ end
 
 local TestSuite = util.Class()
 
-function TestSuite:create(name)
+function TestSuite:new(name)
    return {
       name = name,
       tests = {},

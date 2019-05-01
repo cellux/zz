@@ -174,16 +174,16 @@ local function walk(root, process, get_children, transform_child)
    walk(root)
 end
 
-function Target:create(opts)
+function Target:new(opts)
    assert(type(opts)=="table")
    assert(opts.ctx)
    opts.depends = flatten(opts.depends)
    if opts.dirname or opts.basename then
       if not opts.dirname then
-         ef("Target:create(): no dirname (only basename)")
+         ef("Target:new(): no dirname (only basename)")
       end
       if not opts.basename then
-         ef("Target:create(): no basename (only dirname)")
+         ef("Target:new(): no basename (only dirname)")
       end
       opts.path = fs.join(opts.dirname, opts.basename)
    end
@@ -302,7 +302,7 @@ local function get_build_context(package_name)
    return context_cache[package_name]
 end
 
-function BuildContext:create(pd)
+function BuildContext:new(pd)
    local ctx = {
       pd = pd,
       vars = {},

@@ -68,8 +68,8 @@ function M.Class(parent)
    local class_mt = { __index = parent }
    function class_mt:__call(...)
       local self = {}
-      if class.create then
-         self = class:create(...)
+      if class.new then
+         self = class:new(...)
       elseif select('#', ...)==1 then
          local arg = select(1, ...)
          if type(arg)=="table" then
@@ -297,8 +297,8 @@ end
 
 local Error = M.Class()
 
-function Error:create(level, class, message, extra)
-   level = (level or 1) + 2 -- Error() + Error:create()
+function Error:new(level, class, message, extra)
+   level = (level or 1) + 2 -- Error() + Error:new()
    local self = extra or {}
    self.class = class or "error"
    self.message = tostring(message or "runtime error")
