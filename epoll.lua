@@ -151,11 +151,11 @@ end
 
 local M = {}
 
-function M.create(max_events)
+function M.Poller(max_events)
    local epfd = util.check_errno("epoll_create", ffi.C.epoll_create(1))
    return Poller(epfd, max_events)
 end
 
-M.poller_factory = M.create
+M.poller_factory = M.Poller
 
 return M

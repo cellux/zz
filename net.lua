@@ -490,7 +490,7 @@ end
 
 local function qpoll(fd, cb, quit_event) -- "quittable" poll
    local exit_trigger = trigger()
-   local poller = epoll.create(1)
+   local poller = epoll.Poller(1)
    poller:add(exit_trigger.fd, "r", exit_trigger.fd)
    poller:add(fd, "r", fd)
    quit_event = quit_event or 'quit'
