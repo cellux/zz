@@ -534,6 +534,8 @@ local function Scheduler() -- scheduler constructor
    end
 
    function self.exclusive(fn, data)
+      -- once an exclusive thread starts executing, the scheduler
+      -- always gives it the CPU until it finishes
       local t = self.sched(fn, data)
       table.insert(exclusive_threads, t)
       return t
