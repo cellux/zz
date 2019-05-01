@@ -66,9 +66,9 @@ function Stream:new(obj)
    if type(obj) == "string" then
       obj = buffer.wrap(obj)
    end
-   if type(obj.stream_impl) == "function" then
-      -- obj can create an implementation of the stream API
-      self.impl = obj:stream_impl()
+   if type(obj.as_stream) == "function" then
+      -- obj can create another object which implements the stream API
+      self.impl = obj:as_stream()
    else
       -- obj directly implements the stream API
       self.impl = obj

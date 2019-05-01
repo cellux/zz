@@ -98,7 +98,7 @@ function Buffer_mt:clear()
    ffi.fill(self.ptr, tonumber(self.len), 0)
 end
 
-function Buffer_mt:stream_impl()
+function Buffer_mt:as_stream()
    local stream = {}
    local buf = self
    local read_offset = 0

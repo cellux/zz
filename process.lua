@@ -198,8 +198,8 @@ function M.create(opts)
          return self.sp
       end
 
-      function self:stream_impl()
-         return self:socket():stream_impl()
+      function self:as_stream()
+         return self:socket():as_stream()
       end
 
       local function create_writer(input)

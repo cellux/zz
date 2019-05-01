@@ -420,7 +420,7 @@ function Socket_mt:close()
    return rv
 end
 
-function Socket_mt:stream_impl()
+function Socket_mt:as_stream()
    local stream = {}
    local sock = self
    local eof = false

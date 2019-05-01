@@ -355,7 +355,7 @@ function File_mt:close()
    end
 end
 
-function File_mt:stream_impl()
+function File_mt:as_stream()
    local stream = {}
    local f = self
    local eof = false
