@@ -1,11 +1,12 @@
 -- when this template is instantiated, definitions of the following
--- variables are added to the top:
+-- variables are injected at the top:
 --
 -- ZZ_PACKAGE:
---   FQPN (fully qualified package name) of the containing package
+--   FQPN (fully qualified package name) of the current package
+--   e.g. github.com/cellux/zz_gl
 --
 -- ZZ_CORE_PACKAGE:
---   FQPN of the ZZ core library (github.com/cellux/zz)
+--   FQPN of ZZ core (github.com/cellux/zz)
 --
 -- ZZ_MODNAME_MAP:
 --   map which can be used to resolve fully qualified module names
@@ -151,7 +152,8 @@ local function run_tests(paths)
          end
       end
    end
-   require('testing').run_tests()
+   local root_suite = require('testing')
+   root_suite:run_tests()
 end
 
 -- build system will inject bootstrap code here

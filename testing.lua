@@ -1,7 +1,5 @@
 local util = require('util')
 
-local M = {}
-
 local function fdcount()
    local fs = require('fs')
    local count = 0
@@ -88,13 +86,11 @@ function TestSuite:add(name, testfn, opts)
    if not testfn then
       -- add child suite
       local ts = TestSuite(name)
-      ts.parent = self
       table.insert(self.child_suites, ts)
       return ts
    else
       -- add test
       local t = Test(name, testfn, opts)
-      t.parent = self
       table.insert(self.tests, t)
       return t
    end
@@ -111,7 +107,7 @@ end
 function TestSuite:add_hook(name, fn)
    local hook_list = self.hooks[name]
    if not hook_list then
-      ef("invalid hook name: %s", name)
+      ef("invalid hook: %s", name)
    end
    table.insert(hook_list, fn)
 end
@@ -135,7 +131,7 @@ end
 function TestSuite:run_hooks(name, ...)
    local hook_list = self.hooks[name]
    if not hook_list then
-      ef("invalid hook name: %s", name)
+      ef("invalid hook: %s", name)
    end
    for _,hook in ipairs(hook_list) do
       hook(...)
@@ -148,13 +144,13 @@ function TestSuite:walk(process, test_filter)
    end
    for _,t in ipairs(self.tests) do
       if test_filter == nil or test_filter(t) then
-         process(t)
+         process(t, self)
       end
    end
 end
 
 function TestSuite:run(process, test_filter, tc, report)
-   -- give each suite its own subcontext which inherits from the parent
+   -- each suite has its own subcontext which inherits from the parent
    tc = util.chainlast({}, tc)
    self:run_hooks('before', tc)
    for _,ts in ipairs(self.child_suites) do
@@ -162,17 +158,23 @@ function TestSuite:run(process, test_filter, tc, report)
    end
    for _,t in ipairs(self.tests) do
       if test_filter == nil or test_filter(t) then
-         self:run_hooks('before_each', tc)
-         process(t, tc, report)
-         self:run_hooks('after_each', tc)
+         process(t, self, tc, report)
       end
    end
    self:run_hooks('after', tc)
 end
 
+function TestSuite:run_test(t, tc, report)
+   -- give each test its own context
+   local tc = util.chainlast({}, tc)
+   self:run_hooks('before_each', tc)
+   t:run(tc, report)
+   self:run_hooks('after_each', tc)
+end
+
 function TestSuite:run_nosched_tests(tc, report)
-   local function process(t, tc, report)
-      t:run(tc, report)
+   local function process(t, ts, tc, report)
+      ts:run_test(t, tc, report)
    end
    local function test_filter(t)
       return t:is_nosched()
@@ -183,9 +185,9 @@ end
 function TestSuite:run_sched_tests(tc, report)
    local sched = require('sched')
    local signal = require('signal')
-   local function process(t, tc, report)
+   local function process(t, ts, tc, report)
       local function run_test()
-         t:run(tc, report)
+         ts:run_test(t, tc, report)
       end
       if t:is_exclusive() then
          sched.exclusive(run_test)
@@ -199,21 +201,6 @@ function TestSuite:run_sched_tests(tc, report)
    self:run(process, test_filter, tc, report)
    sched()
 end
-
-function TestSuite:run_tests(report)
-   local fdcount_at_start = fdcount()
-   local tc = TestContext()
-   self:run_nosched_tests(tc, report)
-   self:run_sched_tests(tc, report)
-   local fdcount_at_end = fdcount()
-   if fdcount_at_start ~= fdcount_at_end then
-      pf("detected file descriptor leakage: fdcount at start: %d, fdcount at end: %d", fdcount_at_start, fdcount_at_end)
-   end
-end
-
-M.TestSuite = TestSuite
-
--- built-in reporters
 
 local function ConsoleReporter(suite)
    local total = 0
@@ -251,20 +238,19 @@ local function ConsoleReporter(suite)
    return report
 end
 
---
+function TestSuite:run_tests(report)
+   local fdcount_at_start = fdcount()
+
+   local tc = TestContext()
+   local report = report or ConsoleReporter(self)
+   self:run_nosched_tests(tc, report)
+   self:run_sched_tests(tc, report)
+
+   local fdcount_at_end = fdcount()
+   if fdcount_at_start ~= fdcount_at_end then
+      pf("detected file descriptor leakage: fdcount at start: %d, fdcount at end: %d", fdcount_at_start, fdcount_at_end)
+   end
+end
 
 local root_suite = TestSuite()
-
-function M.run_tests(suite, report)
-   suite = suite or root_suite
-   report = report or ConsoleReporter(suite)
-   suite:run_tests(report)
-end
-
-local M_mt = {}
-
-function M_mt:__call(...)
-   return root_suite:add(...)
-end
-
-return setmetatable(M, M_mt)
+return root_suite
