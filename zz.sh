@@ -22,7 +22,6 @@ PACKAGE_MODULES=(
   nanomsg
   net
   openssl
-  parser
   process
   pthread
   re

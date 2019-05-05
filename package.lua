@@ -248,7 +248,6 @@ P.exports = {
    "nanomsg",
    "net",
    "openssl",
-   "parser",
    "process",
    "pthread",
    "re",
