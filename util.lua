@@ -304,7 +304,7 @@ function Error:new(level, class, message, extra)
    self.message = tostring(message or "runtime error")
    self.info = debug.getinfo(level)
    self.__tostring = self.__tostring or function(self) return self.message end
-   self.traceback = self.traceback or debug.traceback(self.__tostring(self), level)
+   self.traceback = self.traceback or debug.traceback(self:__tostring(), level)
    return self
 end
 
@@ -325,7 +325,8 @@ end
 
 function M.check_ok(funcname, okvalue, rv)
    if rv ~= okvalue then
-      error(sf("%s() failed: %s", funcname, rv), 2)
+      local message = sf("%s() failed: %s", funcname, rv)
+      M.throwat(2, "check_ok", message)
    else
       return rv
    end
@@ -333,7 +334,8 @@ end
 
 function M.check_bad(funcname, badvalue, rv)
    if rv == badvalue then
-      error(sf("%s() failed: %s", funcname, rv), 2)
+      local message = sf("%s() failed: %s", funcname, rv)
+      M.throwat(2, "check_bad", message)
    else
       return rv
    end
@@ -343,7 +345,8 @@ function M.check_errno(funcname, rv)
    if rv == -1 then
       local _errno = errno.errno()
       local message = sf("%s() failed: %s", funcname, errno.strerror(_errno))
-      M.throwat(2, "libc", message, { errno = _errno })
+      local context = { errno = _errno }
+      M.throwat(2, "check_errno", message, context)
    else
       return rv
    end

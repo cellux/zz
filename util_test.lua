@@ -451,3 +451,25 @@ testing("pcall", function()
    local traceback_pattern = "^joie\nstack traceback:\n\\s+\\S+/util_test\\.lua:\\d+: in function 'willthrow'\n"
    assert.match(traceback_pattern, e.traceback)
 end)
+
+testing("check_ok", function()
+   local function return_5()
+      return 5
+   end
+   assert.equals(util.check_ok('return_5', 5, return_5()), 5)
+   local err = assert.throws('return_5\\(\\) failed: 5', function()
+      util.check_ok('return_5', 4, return_5())
+   end)
+   assert.equals(err.class, 'check_ok')
+end)
+
+testing("check_bad", function()
+   local function return_5()
+      return 5
+   end
+   assert.equals(util.check_bad('return_5', -1, return_5()), 5)
+   local err = assert.throws('return_5\\(\\) failed: 5', function()
+      util.check_bad('return_5', 5, return_5())
+   end)
+   assert.equals(err.class, 'check_bad')
+end)
