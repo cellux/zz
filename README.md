@@ -2,7 +2,7 @@
 
 ZZ is a general-purpose app engine built on top of LuaJIT and C. It has a small core, a growing set of extension libraries and a command line tool `zz` which can be used to compile ZZ programs into self-contained binary executables.
 
-The current version only supports Linux.
+The current version only runs on Linux.
 
 > Warning: This project is work in progress. The code is continuously
 > changing/evolving as I figure out what works and what doesn't. Use
@@ -17,10 +17,11 @@ The current version only supports Linux.
 * non-blocking timers (time)
 * non-blocking Unix/TCP/UDP sockets (epoll, net)
 * non-blocking file-system operations (fs)
-* unified streaming API over files, sockets and memory buffers (stream)
+* unified stream API over files, sockets and memory buffers (stream)
 * inter-process communication via message passing (nanomsg, msgpack)
 * process management (process)
 * regular expressions (re)
+* reading/writing of ZIP files (zip)
 * access to command line arguments (argparser)
 * access to environment variables (env)
 * async testing framework (testing, assert)
@@ -30,19 +31,20 @@ The current version only supports Linux.
 * [LuaJIT](http://luajit.org/)
 * [nanomsg](http://nanomsg.org/)
 * [cmp](https://github.com/camgunz/cmp)
+* [libzip](https://libzip.org)
 * [inspect.lua](https://github.com/kikito/inspect.lua)
 
 These are either automatically downloaded upon compilation or bundled with the source.
 
 ## Installation
 
-Build dependencies:
+First install the following build dependencies:
 
 ```
 bash curl sha1sum awk make gcc binutils cmake
 ```
 
-How to build:
+Then run the following commands in a shell:
 
 ```bash
 # everything is stored under $ZZPATH
@@ -83,7 +85,7 @@ zz run 07-geometry-shader-blending.lua
 ## Further information
 
 * read the tests (`*_test.lua`)
-* check [INTERNALS.md] for some further details
+* check INTERNALS.md for some further details
 
 ## Goals
 
@@ -108,5 +110,3 @@ zz run 07-geometry-shader-blending.lua
 * [Scheme](http://www.schemers.org/Documents/Standards/R5RS/)
 * [Extempore](https://github.com/digego/extempore)
 * [SuperCollider](https://supercollider.github.io/)
-* [Leonard and Sylvia Ritter](http://www.duangle.com/)
-* [William A. Adams](https://williamaadams.wordpress.com/)
