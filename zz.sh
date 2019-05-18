@@ -35,9 +35,10 @@ PACKAGE_MODULES=(
   uri
   util
   vfs
+  zip
   zz
 )
-PACKAGE_LIBS=(zz luajit cmp nanomsg)
+PACKAGE_LIBS=(zz luajit cmp nanomsg zip)
 PACKAGE_APPS=(zz)
 PACKAGE_INSTALL=(zz)
 
@@ -79,9 +80,18 @@ NANOMSG_ROOT="native/$NANOMSG_DIR"
 NANOMSG_LIB="$NANOMSG_ROOT/libnanomsg.a"
 NANOMSG_SRC="$NANOMSG_ROOT/src"
 
+LIBZIP_VER="1.5.2"
+LIBZIP_TGZ="libzip-$LIBZIP_VER.tar.gz"
+LIBZIP_URL="https://libzip.org/download/$LIBZIP_TGZ"
+LIBZIP_DIR="libzip-$LIBZIP_VER"
+LIBZIP_ROOT="native/$LIBZIP_DIR"
+LIBZIP_SRC="$LIBZIP_ROOT/lib"
+LIBZIP_BUILD="$LIBZIP_ROOT/build"
+LIBZIP_LIB="$LIBZIP_BUILD/lib/libzip.a"
+
 CC="${CC:-gcc}"
-CFLAGS="-Wall -iquote $LUAJIT_SRC -iquote $NANOMSG_SRC -iquote $CMP_SRC"
-LDFLAGS="-Wl,-E -lm -ldl -lpthread -lanl"
+CFLAGS="-Wall -iquote $LUAJIT_SRC -iquote $NANOMSG_SRC -iquote $CMP_SRC -iquote $LIBZIP_SRC"
+LDFLAGS="-Wl,-E -lm -ldl -lpthread -lanl -lz"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -176,6 +186,20 @@ build_nanomsg() {
   fi
   if [ "$NANOMSG_LIB" -nt "$LIBDIR/$(basename "$NANOMSG_LIB")" ]; then
     run install -v -t "$LIBDIR" -D -m 0644 -p "$NANOMSG_LIB"
+  fi
+}
+
+build_libzip() {
+  download "$LIBZIP_URL" "$LIBZIP_TGZ"
+  extract "$LIBZIP_TGZ" "$LIBZIP_DIR"
+  if [ ! -e "$LIBZIP_LIB" ]; then
+    mkdir "$LIBZIP_BUILD"
+    (cd "$LIBZIP_BUILD" && run cmake -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_MBEDTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_WINDOWS_CRYPTO=OFF -DENABLE_BZIP2=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DBUILD_SHARED_LIBS=OFF -Wno-dev ..)
+    (cd "$LIBZIP_BUILD" && run make)
+    (cd "$LIBZIP_BUILD" && run make test)
+  fi
+  if [ "$LIBZIP_LIB" -nt "$LIBDIR/$(basename "$LIBZIP_LIB")" ]; then
+    run install -v -t "$LIBDIR" -D -m 0644 -p "$LIBZIP_LIB"
   fi
 }
 
@@ -396,6 +420,7 @@ build_native() {
   build_luajit
   build_cmp
   build_nanomsg
+  build_libzip
 }
 
 do_build() {
@@ -419,6 +444,7 @@ do_nativeclean() {
   [ -e "$LUAJIT_ROOT/Makefile" ] && (cd "$LUAJIT_ROOT" && run make clean)
   [ -e "$CMP_OBJ" ] && run rm -f "$CMP_OBJ"
   [ -e "$NANOMSG_ROOT/Makefile" ] && (cd "$NANOMSG_ROOT" && run make clean)
+  [ -d "LIBZIP_BUILD" ] && rm -rf "LIBZIP_BUILD"
 }
 
 do_distclean() {
