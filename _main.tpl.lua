@@ -1,7 +1,7 @@
 -- when this template is instantiated, the following local variables
 -- are injected at the top:
 --
--- ZZ_PACKAGE:
+-- ZZ_MAIN_PACKAGE:
 --   FQPN (fully qualified package name) of the executing package
 --   e.g. github.com/cellux/zz_examples
 --
@@ -109,8 +109,8 @@ local function setup_require(fqpn, seen)
    return pd.require
 end
 
--- ZZ_PACKAGE is injected by the build system
-_G.require = setup_require(ZZ_PACKAGE, {})
+-- ZZ_MAIN_PACKAGE is injected by the build system
+_G.require = setup_require(ZZ_MAIN_PACKAGE, {})
 
 require('globals')
 

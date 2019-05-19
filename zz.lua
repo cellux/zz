@@ -673,7 +673,7 @@ function BuildContext:gen_preamble()
    local function add(...)
       table.insert(lines, sf(...).."\n")
    end
-   add("local ZZ_PACKAGE = '%s'", self.pd.package)
+   add("local ZZ_MAIN_PACKAGE = '%s'", self.pd.package)
    add("local ZZ_CORE_PACKAGE = '%s'", ZZ_CORE_PACKAGE)
    add("local ZZ_MODNAME_MAP = %s", self:gen_modname_map())
    return table.concat(lines)
