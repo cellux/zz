@@ -15,12 +15,12 @@ local function writeln(stream, line)
    return stream:writeln(line, "\x0d\x0a")
 end
 
-local make_stream = stream -- has a __call metamethod
+local make_stream = stream -- via __call
 
 --[[ headers ]]--
 
 local Headers_mt = {
-   -- provides case-insensitive lookup by header name
+   -- case-insensitive lookup by header name
    __index = function(self, key)
       key = string.lower(key)
       for k,v in pairs(self) do
@@ -34,7 +34,7 @@ local Headers_mt = {
    end
 }
 
-local header_regex = re.compile("^(\\S+):\\s*(.+)\\s*$")
+local header_line_regex = re.compile([[^(\S+):\s*(.+)\s*$]])
 
 local function read_headers(stream)
    local headers = {}
@@ -46,7 +46,7 @@ local function read_headers(stream)
       if line == "" then
          break
       end
-      local m = header_regex:match(line)
+      local m = header_line_regex:match(line)
       if not m then
          ef("Invalid header line: %s", line)
       end
@@ -68,7 +68,7 @@ end
 
 local Request = util.Class()
 
-function Request:create(opts)
+function Request:new(opts)
    local self = {
       stream = opts.stream,
       method = opts.method or "GET",
@@ -85,7 +85,7 @@ function Request:create(opts)
    end
    local content_length = opts.content_length or self._headers['Content-Length']
    if content_length then
-      self._headers['Content-Length'] = tostring(content_length)
+      self._headers['Content-Length'] = content_length
       self.content_length = tonumber(content_length)
    end
    return self
@@ -105,7 +105,7 @@ function Request:read_body()
    return self.stream:read(self.content_length)
 end
 
-local request_line_regex = re.compile("^(\\S+)\\s+(\\S+)\\s+(HTTP/[0-9.]+)$")
+local request_line_regex = re.compile([[^(\S+)\s+(\S+)\s+(HTTP/[0-9.]+)$]])
 
 local function read_request(stream)
    local request_line = readln(stream)
@@ -149,7 +149,7 @@ local function write_request(stream, request)
          ef("invalid body: %s", b)
       end
    else
-      request:header("Content-Length", "0")
+      request:header("Content-Length", 0)
       request.content_length = 0
    end
    write_headers(stream, request._headers)
@@ -167,10 +167,76 @@ M.write_request = write_request
 local Response = util.Class()
 
 local status_reasons = {
-   [200] = "OK"
+   [100] = "Continue",
+   [101] = "Switching protocols",
+   [102] = "Processing",
+   [200] = "OK",
+   [201] = "Created",
+   [202] = "Accepted",
+   [203] = "Non-authoritative information",
+   [204] = "No content",
+   [205] = "Reset content",
+   [206] = "Partial content",
+   [207] = "Multi-status",
+   [210] = "Content different",
+   [226] = "IM used",
+   [300] = "Multiple choices",
+   [301] = "Moved permanently",
+   [302] = "Moved temporarily",
+   [303] = "See other",
+   [304] = "Not modified",
+   [305] = "Use proxy",
+   [307] = "Temporary redirect",
+   [308] = "Permanent redirect",
+   [310] = "Too many redirects",
+   [400] = "Bad request",
+   [401] = "Unauthorized",
+   [402] = "Payment required",
+   [403] = "Forbidden",
+   [404] = "Not found",
+   [405] = "Method not allowed",
+   [406] = "Not acceptable",
+   [407] = "Proxy authentication required",
+   [408] = "Request timeout",
+   [409] = "Conflict",
+   [410] = "Gone",
+   [411] = "Length required",
+   [412] = "Precondition failed",
+   [413] = "Request entity too large",
+   [414] = "Request URI too long",
+   [415] = "Unsupported media type",
+   [416] = "Requested range unsatisfiable",
+   [417] = "Expectation failed",
+   [418] = "I'm a teapot",
+   [422] = "Unprocessable entity",
+   [423] = "Locked",
+   [424] = "Method failure",
+   [425] = "Too early",
+   [426] = "Upgrade required",
+   [428] = "Precondition required",
+   [429] = "Too many requests",
+   [431] = "Request header fields too large",
+   [449] = "Retry with",
+   [450] = "Blocked by Windows Parental Controls",
+   [451] = "Unavailable for legal reasons",
+   [456] = "Unrecoverable error",
+   [499] = "Client has closed connection",
+   [500] = "Internal server error",
+   [501] = "Not implemented",
+   [502] = "Bad gateway or proxy error",
+   [503] = "Service unavailable",
+   [504] = "Gateway timeout",
+   [505] = "HTTP version not supported",
+   [506] = "Variant also negotiate",
+   [507] = "Insufficient storage",
+   [508] = "Loop detected",
+   [509] = "Bandwidth limit exceeded",
+   [510] = "Not extended",
+   [511] = "Network authentication required",
+   [520] = "Web server is returning an unknown error",
 }
 
-function Response:create(opts)
+function Response:new(opts)
    local status = tonumber(opts.status or 200)
    local status_reason = opts.status_reason or status_reasons[status]
    local self = {
@@ -189,7 +255,7 @@ function Response:create(opts)
    end
    local content_length = opts.content_length or self._headers['Content-Length']
    if content_length then
-      self._headers['Content-Length'] = tostring(content_length)
+      self._headers['Content-Length'] = content_length
       self.content_length = tonumber(content_length)
    end
    return self
@@ -209,7 +275,7 @@ function Response:read_body()
    return self.stream:read(self.content_length)
 end
 
-local status_line_regex = re.compile("^(HTTP/[0-9.]+)\\s+([0-9]+)\\s+(.+)$")
+local status_line_regex = re.compile([[^(HTTP/[0-9.]+)\s+([0-9]+)\s+(.+)$]])
 
 local function read_response(stream)
    local status_line = readln(stream)
@@ -248,6 +314,9 @@ local function write_response(stream, response)
       else
          ef("invalid body: %s", b)
       end
+   else
+      response:header("Content-Length", 0)
+      response.content_length = 0
    end
    write_headers(stream, response._headers)
    if body_writer then
@@ -263,7 +332,7 @@ M.write_response = write_response
 
 local StreamServer = util.Class()
 
-function StreamServer:create(stream, request_handler)
+function StreamServer:new(stream, request_handler)
    return {
       stream = make_stream(stream),
       request_handler = request_handler,
@@ -297,7 +366,7 @@ M.StreamServer = StreamServer
 
 local StreamClient = util.Class()
 
-function StreamClient:create(stream)
+function StreamClient:new(stream)
    return {
       stream = make_stream(stream),
       http_version = "HTTP/1.1",
