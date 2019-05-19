@@ -9,7 +9,6 @@ local inspect = require('inspect')
 local util = require('util')
 local bcsave = require('jit.bcsave')
 local ffi = require('ffi')
-local adt = require('adt')
 local stream = require('stream')
 
 local reduce = util.reduce

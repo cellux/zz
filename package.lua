@@ -306,7 +306,6 @@ P.native.libzip = function(ctx)
 end
 
 P.exports = {
-   "adt",
    "argparser",
    "assert",
    "async",

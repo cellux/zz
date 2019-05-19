@@ -4,7 +4,6 @@ local sched = require('sched')
 local pthread = require('pthread')
 local trigger = require('trigger')
 local inspect = require('inspect')
-local adt = require('adt')
 
 ffi.cdef [[
 
@@ -44,7 +43,7 @@ local MAX_ACTIVE_THREADS = 16
 local thread_pool = {}
 
 -- reservation ids of coroutines waiting for a worker thread
-local reserve_queue = adt.List()
+local reserve_queue = util.List()
 
 -- number of worker threads (free + active)
 local n_worker_threads   = 0
@@ -136,7 +135,7 @@ local function AsyncModule(sched)
    local self = {}
    function self.init()
       thread_pool = {}
-      reserve_queue = adt.List()
+      reserve_queue = util.List()
       n_active_threads = 0
       n_worker_threads = 0
    end

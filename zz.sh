@@ -4,7 +4,6 @@ set -eu
 
 PACKAGE="github.com/cellux/zz"
 PACKAGE_MODULES=(
-  adt
   argparser
   assert
   async

@@ -1,5 +1,4 @@
 local ffi = require('ffi')
-local adt = require('adt')
 local time = require('time')
 local nn = require('nanomsg')
 local msgpack = require('msgpack')
@@ -195,7 +194,7 @@ local function Scheduler() -- scheduler constructor
    local module_registry = ModuleRegistry(self)
 
    -- runnable threads are those which can be resumed in the current tick
-   local runnables = adt.List()
+   local runnables = util.List()
 
    -- each runnable consists of a callable (of some sort) and one piece of data
    local function Runnable(r, data)
@@ -209,7 +208,7 @@ local function Scheduler() -- scheduler constructor
    -- sleeping threads are waiting for their time to come
    --
    -- the list is ordered by wake-up time
-   local sleeping = adt.OrderedList(function(st) return st.time end)
+   local sleeping = util.OrderedList(function(st) return st.time end)
 
    local function SleepingRunnable(r, time)
       return { r = r, time = time }
@@ -227,7 +226,7 @@ local function Scheduler() -- scheduler constructor
 
    local function add_waiting(evtype, r) -- r = runnable
       if not waiting[evtype] then
-         waiting[evtype] = adt.List()
+         waiting[evtype] = util.List()
       end
       waiting[evtype]:push(r)
       if type(r)=="thread" then
@@ -260,7 +259,7 @@ local function Scheduler() -- scheduler constructor
    -- 1. collects events and pushes them to the event queue
    -- 2. processes all events in the event queue
    -- 3. gives all runnable threads a chance to run (resume)
-   local event_queue = adt.List()
+   local event_queue = util.List()
 
    -- event_sub: the socket we receive events from
    -- C threads can use this socket to post events
@@ -344,7 +343,7 @@ local function Scheduler() -- scheduler constructor
          -- wake up runnables waiting for this evtype
          local rs = waiting[evtype]
          if rs then
-            local rs_next = adt.List()
+            local rs_next = util.List()
             for r in rs:itervalues() do
                if type(r)=="thread" then
                   -- plain thread
@@ -388,7 +387,7 @@ local function Scheduler() -- scheduler constructor
       end
 
       local function resume_runnables()
-         local runnables_next = adt.List()
+         local runnables_next = util.List()
          for runnable in runnables:itervalues() do
             local r, data = runnable.r, runnable.data
             local is_background = (type(r)=="table")
