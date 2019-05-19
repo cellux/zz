@@ -1,15 +1,15 @@
--- when this template is instantiated, definitions of the following
--- variables are injected at the top:
+-- when this template is instantiated, the following local variables
+-- are injected at the top:
 --
 -- ZZ_PACKAGE:
---   FQPN (fully qualified package name) of the current package
---   e.g. github.com/cellux/zz_gl
+--   FQPN (fully qualified package name) of the executing package
+--   e.g. github.com/cellux/zz_examples
 --
 -- ZZ_CORE_PACKAGE:
---   FQPN of ZZ core (github.com/cellux/zz)
+--   FQPN of the ZZ core package (github.com/cellux/zz)
 --
 -- ZZ_MODNAME_MAP:
---   map which can be used to resolve fully qualified module names
+--   a map which can be used to resolve fully qualified module names
 --   (`FQPN/module`) to their lj_requireable mangled names
 
 -- save the original require function
@@ -28,10 +28,15 @@ local function reverse(t)
 end
 
 local function setup_require(fqpn, seen)
-   -- create and return a package-specific require function which
+   -- create and return a require function for package `fqpn` which
    -- looks up modules in the package's declared dependency order
    --
-   -- also add it to the package descriptor (pd.require)
+   -- the new require function is also added to the package descriptor
+   -- of `fqpn` (pd.require)
+   --
+   -- while a module of `fqpn` is loaded, it uses the require function
+   -- of `fqpn`. this ensures that require() calls made by the module
+   -- are resolved using the dependency order of its own package.
    if seen[fqpn] then return end
    seen[fqpn] = true
    -- load package descriptor
@@ -57,7 +62,7 @@ local function setup_require(fqpn, seen)
    -- P2 both define module M but P2 comes *before* P1 in the import
    -- list, require(M) will find the P2 version
    --
-   -- a specific version can pulled in by requiring the fully
+   -- a specific module can pulled in by requiring the fully
    -- qualified module name e.g. "github.com/cellux/zz/util"
    for _,fqpn in ipairs(reverse(pd.imports)) do
       process_import(fqpn)
@@ -69,6 +74,8 @@ local function setup_require(fqpn, seen)
    pd.require = function(m)
       return (loaders[m] or lj_require)(m)
    end
+   -- each package gets its own global environment which overrides
+   -- require() with the package-specific version
    local package_env = setmetatable({ require = pd.require }, { __index = _G })
    pd.exports = pd.exports or {}
    local function process_export(m)
@@ -117,7 +124,9 @@ local function sched_main(M)
 end
 
 local function run_module(mangled_module_name)
-   -- if the module has no main function, requiring it is the same as running it
+   -- if the module has no main function,
+   -- requiring it is the same as running it
+   --
    -- if it has a main function, sched_main() will invoke it
    sched_main(lj_require(mangled_module_name))
 end
@@ -152,8 +161,10 @@ local function run_tests(paths)
          end
       end
    end
+   -- the *_test.lua files we loaded above populated the root_suite
+   -- with tests
    local root_suite = require('testing')
    root_suite:run_tests()
 end
 
--- build system will inject bootstrap code here
+-- build system will inject bootstrap code after this line
