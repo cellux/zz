@@ -585,7 +585,7 @@ function Stat_mt:free()
    end
 end
 
-Stat_mt.__gc = Stat_mt.free
+--Stat_mt.__gc = Stat_mt.free
 
 local Stat = ffi.metatype("struct zz_fs_Stat_ct", Stat_mt)
 
@@ -628,7 +628,7 @@ function Dir_mt:close()
 end
 
 Dir_mt.__index = Dir_mt
-Dir_mt.__gc = Dir_mt.close
+--Dir_mt.__gc = Dir_mt.close
 
 local Dir = ffi.metatype("struct zz_fs_Dir_ct", Dir_mt)
 

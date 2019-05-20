@@ -41,4 +41,6 @@ testing("trigger", function()
 
    assert.equals(keep_gathering_wood, false)
    assert.equals(wood_gathered, 52)
+
+   t:delete()
 end)

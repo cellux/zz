@@ -114,7 +114,7 @@ local pcre_mt = {
 }
 
 pcre_mt.__index = pcre_mt
-pcre_mt.__gc = pcre_mt.delete
+--pcre_mt.__gc = pcre_mt.delete
 
 local function is_regex(x)
    return type(x) == "table" and getmetatable(x) == pcre_mt

@@ -358,11 +358,7 @@ function M.create(opts)
       invoke_on_all_channels("close")
    end
 
-   local mt = {
-      __gc = self.close
-   }
-
-   return setmetatable(self, mt)
+   return self
 end
 
 function M.start(opts)
