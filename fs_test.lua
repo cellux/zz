@@ -106,6 +106,7 @@ end)
 
 testing("exists", function()
    assert(fs.exists('testdata/hello.txt'))
+   assert(fs.exists('testdata/sub/HighHopes.txt'))
    assert(not fs.exists('non-existing-file'))
 end)
 
@@ -117,34 +118,6 @@ testing:exclusive("chmod", function()
    assert(fs.stat("testdata/hello.txt").perms == util.oct("644"))
    assert(not fs.is_executable("testdata/hello.txt"))
 end)
-
---[[ this test fails if run as root
-testing:exclusive("readable_writable_executable", function()
-   local hello_txt_perms = util.oct("644")
-   fs.chmod("testdata/hello.txt", hello_txt_perms)
-
-   assert(fs.is_readable("testdata/hello.txt"))
-   assert(fs.is_writable("testdata/hello.txt"))
-   assert(not fs.is_executable("testdata/hello.txt"))
-
-   fs.chmod("testdata/hello.txt", util.oct("400"))
-   assert(fs.is_readable("testdata/hello.txt"))
-   assert(not fs.is_writable("testdata/hello.txt"))
-   assert(not fs.is_executable("testdata/hello.txt"))
-
-   fs.chmod("testdata/hello.txt", util.oct("200"))
-   assert(not fs.is_readable("testdata/hello.txt"))
-   assert(fs.is_writable("testdata/hello.txt"))
-   assert(not fs.is_executable("testdata/hello.txt"))
-
-   fs.chmod("testdata/hello.txt", util.oct("100"))
-   assert(not fs.is_readable("testdata/hello.txt"))
-   assert(not fs.is_writable("testdata/hello.txt"))
-   assert(fs.is_executable("testdata/hello.txt"))
-
-   fs.chmod("testdata/hello.txt", hello_txt_perms)
-end)
-]]--
 
 testing:exclusive("stat", function()
    local s = fs.stat("testdata/hello.txt")
@@ -215,6 +188,7 @@ testing("readdir", function()
       'hello.txt',
       'hello.txt.symlink',
       'www.google.com.txt',
+      'sub'
    }
    table.sort(expected_entries)
 
@@ -249,6 +223,7 @@ testing("basename", function()
    assert.equals(fs.basename("/hello.txt"), "hello.txt")
    assert.equals(fs.basename("./hello.txt"), "hello.txt")
    assert.equals(fs.basename("hello.txt"), "hello.txt")
+   assert.equals(fs.basename("testdata/sub/HighHopes.txt"), "HighHopes.txt")
 end)
 
 testing("dirname", function()
@@ -258,6 +233,7 @@ testing("dirname", function()
    assert.equals(fs.dirname("./hello.txt"), ".")
    assert.equals(fs.dirname("testdata/hello.txt"), "testdata")
    assert.equals(fs.dirname("x"), ".")
+   assert.equals(fs.dirname("testdata/sub/HighHopes.txt"), "testdata/sub")
 end)
 
 testing("join", function()
@@ -460,5 +436,8 @@ testing("glob", function()
    assert.equals(fs.glob("testdata/*.txt"), {
      "testdata/hello.txt",
      "testdata/www.google.com.txt"
+   })
+   assert.equals(fs.glob("testdata/sub/*.txt"), {
+     "testdata/sub/HighHopes.txt"
    })
 end)
