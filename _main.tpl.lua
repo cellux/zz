@@ -76,7 +76,11 @@ local function setup_require(fqpn, seen)
    end
    -- each package gets its own global environment which overrides
    -- require() with the package-specific version
-   local package_env = setmetatable({ require = pd.require }, { __index = _G })
+   local package_env = setmetatable({
+      require = pd.require,
+      ZZ_PACKAGE = pd.package,
+      ZZ_PACKAGE_DESCRIPTOR = pd
+   }, { __index = _G })
    pd.exports = pd.exports or {}
    local function process_export(m)
       local mangled = ZZ_MODNAME_MAP[fqpn..'/'..m]
@@ -105,7 +109,11 @@ local function setup_require(fqpn, seen)
    for _,m in ipairs(pd.exports) do
       process_export(m)
    end
-   process_export("package")
+   -- require('package') shall return the extended/annotated package
+   -- descriptor we prepared above
+   local package_loader = function() return pd end
+   loaders['package'] = package_loader
+   loaders[fqpn..'/package'] = package_loader
    return pd.require
 end
 
@@ -128,7 +136,23 @@ local function run_module(mangled_module_name)
    -- requiring it is the same as running it
    --
    -- if it has a main function, sched_main() will invoke it
-   sched_main(lj_require(mangled_module_name))
+   sched_main(require(mangled_module_name))
+end
+
+local function make_package_env()
+   local pd = require('package')
+
+   assert(type(pd)=="table")
+   assert(type(pd.package)=="string")
+   assert(type(pd.require)=="function")
+
+   local package_env = setmetatable({
+      require = pd.require,
+      ZZ_PACKAGE = pd.package,
+      ZZ_PACKAGE_DESCRIPTOR = pd
+   }, { __index = _G })
+
+   return package_env
 end
 
 local function run_script(path)
@@ -136,6 +160,7 @@ local function run_script(path)
    if type(chunk) ~= "function" then
       print(err)
    else
+      setfenv(chunk, make_package_env())
       sched_main(chunk())
    end
 end
@@ -147,6 +172,7 @@ local function run_tests(paths)
       local testname = basename:sub(1,-5) -- strip ".lua" extension
       return testname
    end
+   local package_env = make_package_env()
    for _,path in ipairs(paths) do
       local testname = strip(path)
       local chunk, err = loadfile(path)
@@ -154,6 +180,7 @@ local function run_tests(paths)
          pf(testname..': COMPILE ERROR')
          print(err)
       else
+         setfenv(chunk, package_env)
          local ok, err = pcall(chunk)
          if not ok then
             pf(testname..': LOAD ERROR')

@@ -747,30 +747,39 @@ function BuildContext:main_targets(name, bootstrap_code)
    return { main_o, main_lo }
 end
 
-function BuildContext:gen_vfs_mount()
-   local code = ''
-   if next(self.pd.mounts) then
-      code = [[
-         do
-            local vfs = require('vfs')
-            local pd = require('package')
-            vfs.mount_all(pd.mounts, ']]..self.srcdir..[[')
+function BuildContext:gen_vfs_mounts()
+   local mount_statements = {}
+   self:walk_imports(function(ctx)
+      for _,dir in ipairs(ctx.pd.mounts) do
+         if type(dir) ~= "string" then
+            ef("invalid mount specification in package %s: %s", ctx.pd.package, inspect(dir))
          end
-]]
+         table.insert(mount_statements,
+            sf("vfs.mount('%s','%s')\n",
+               fs.join(ctx.srcdir, dir),
+               ctx.pd.package))
+      end
+   end)
+   local code = ''
+   if #mount_statements > 0 then
+      code = code .. "do\n"
+      code = code .. "local vfs = require('vfs')\n"
+      code = code .. table.concat(mount_statements)
+      code = code .. "end\n"
    end
    return code
 end
 
 function BuildContext:gen_app_bootstrap(appname)
-   return self:gen_vfs_mount()..sf("run_module('%s')\n", self:mangle(appname))
+   return self:gen_vfs_mounts()..sf("run_module('%s')\n", self:mangle(appname))
 end
 
 function BuildContext:gen_run_bootstrap()
-   return self:gen_vfs_mount()..sf("run_script(table.remove(_G.arg,1))\n")
+   return self:gen_vfs_mounts()..sf("run_script(table.remove(_G.arg,1))\n")
 end
 
 function BuildContext:gen_test_bootstrap()
-   return self:gen_vfs_mount().."run_tests(_G.arg)\n"
+   return self:gen_vfs_mounts().."run_tests(_G.arg)\n"
 end
 
 function BuildContext:prep_app_targets()

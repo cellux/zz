@@ -1,14 +1,15 @@
-local testing = require('testing')
+local testing = require('testing')('vfs')
 local vfs = require('vfs')
 local fs = require('fs')
 local assert = require('assert')
 local buffer = require('buffer')
 
--- ensure we are standing in srcdir
-assert(fs.is_dir('testdata'))
-assert(fs.is_reg('vfs_test.lua'))
+testing("we shall be standing in srcdir for the other tests to work", function()
+   assert(fs.is_dir('testdata'))
+   assert(fs.is_reg('vfs_test.lua'))
+end)
 
-testing("vfs", function()
+testing("Root", function()
    local root = vfs.Root()
    assert(not root:exists('arborescence.jpg'))
    root:mount('testdata')
@@ -20,11 +21,21 @@ testing("vfs", function()
 
    -- vfs readfile returns a buffer
    assert(buffer.is_buffer(root:readfile('arborescence.jpg')))
+end)
 
+testing("default Root instance", function()
    -- calls on vfs itself are proxied to a default Root instance
    vfs.mount('testdata', 'assets')
    assert(not vfs.exists('arborescence.jpg'))
    assert(not vfs.exists('testdata/arborescence.jpg'))
    assert(vfs.exists('assets/arborescence.jpg'))
    assert.equals(vfs.readfile('assets/arborescence.jpg'), fs.readfile('testdata/arborescence.jpg'))
+end)
+
+testing("mounting subdirectories into subdirectories", function()
+   local root = vfs.Root()
+   root:mount('testdata', 'x/y')
+   root:mount('testdata/sub', 'x/z')
+   assert(root:exists('x/y/arborescence.jpg'))
+   assert(root:exists('x/z/HighHopes.txt'))
 end)
