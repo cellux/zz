@@ -751,19 +751,28 @@ function BuildContext:main_targets(name, bootstrap_code)
    return { main_o, main_lo }
 end
 
-function BuildContext:gen_vfs_mounts()
-   local mount_statements = {}
+function BuildContext:collect_mounts()
+   local mounts = {}
    self:walk_imports(function(ctx)
       for _,dir in ipairs(ctx.pd.mounts) do
          if type(dir) ~= "string" then
             ef("invalid mount specification in package %s: %s", ctx.pd.package, inspect(dir))
          end
-         table.insert(mount_statements,
-            sf("vfs.mount('%s','%s')\n",
-               fs.join(ctx.srcdir, dir),
-               ctx.pd.package))
+         table.insert(mounts, {
+            pkg = ctx.pd.package,
+            path = fs.join(ctx.srcdir, dir)
+         })
       end
    end)
+   return mounts
+end
+
+function BuildContext:gen_vfs_mounts()
+   local mount_statements = {}
+   for mount in ipairs(self:collect_mounts()) do
+      table.insert(mount_statements,
+         sf("vfs.mount('%s','%s')\n", mount.path, mount.pkg))
+   end
    local code = ''
    if #mount_statements > 0 then
       code = code .. "do\n"
