@@ -427,4 +427,9 @@ function M.umask(umask)
    return prev_umask
 end
 
+function M.get_executable_path()
+   local fs = require('fs')
+   return fs.readlink('/proc/self/exe')
+end
+
 return M
