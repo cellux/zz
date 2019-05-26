@@ -242,6 +242,8 @@ testing("join", function()
    assert.equals(fs.join("abc","def"), "abc/def")
    assert.equals(fs.join("abc",".", "def"), "abc/./def")
    assert.equals(fs.join("abc","/def"), "abc//def")
+   assert.equals(fs.join("", "abc"), "abc")
+   assert.equals(fs.join("abc", ""), "abc")
 end)
 
 testing("stream.read", function()

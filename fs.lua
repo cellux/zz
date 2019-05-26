@@ -868,7 +868,14 @@ local function join(path, ...)
    if n_rest == 0 then
       return path
    elseif type(path)=="string" then
-      return sf("%s/%s", path, join(...))
+      local rest = join(...)
+      if path == "" then
+         return rest
+      elseif rest == "" then
+         return path
+      else
+         return sf("%s/%s", path, rest)
+      end
    else
       ef("Invalid argument to join: %s", path)
    end
