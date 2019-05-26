@@ -248,9 +248,9 @@ compile_main() {
   # stdin: main program
   cp _main.tpl.c "$TMPDIR/_main.c"
   {
-    echo "local ZZ_MAIN_PACKAGE = '$PACKAGE'"
-    echo "local ZZ_CORE_PACKAGE = '$PACKAGE'"
-    echo "local ZZ_MODNAME_MAP = {"
+    echo "ZZ_PACKAGE = '$PACKAGE'"
+    echo "ZZ_CORE_PACKAGE = '$PACKAGE'"
+    echo "ZZ_MODNAME_MAP = {"
     for m in $(package_modules) package; do
       echo "['$PACKAGE/$m']='$(mangle $m)',"
     done

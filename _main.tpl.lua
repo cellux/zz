@@ -1,8 +1,8 @@
--- when this template is instantiated, the following local variables
+-- when this template is instantiated, the following global variables
 -- are injected at the top:
 --
--- ZZ_MAIN_PACKAGE:
---   FQPN (fully qualified package name) of the executing package
+-- ZZ_PACKAGE:
+--   FQPN (fully qualified package name) of the main package
 --   e.g. github.com/cellux/zz_examples
 --
 -- ZZ_CORE_PACKAGE:
@@ -28,29 +28,43 @@ local function reverse(t)
 end
 
 local function setup_require(fqpn, seen)
-   -- create and return a require function for package `fqpn` which
-   -- looks up modules in the package's declared dependency order
+   -- create and return a require(M) function for package `fqpn` which
+   -- looks up module M using the package's declared dependency order:
    --
-   -- the new require function is also added to the package descriptor
-   -- of `fqpn` (pd.require)
+   -- 1. look for M in the package itself
    --
-   -- while a module of `fqpn` is loaded, it uses the require function
-   -- of `fqpn`. this ensures that require() calls made by the module
-   -- are resolved using the dependency order of its own package.
+   -- 2. look for M in the core package
+   --
+   -- 3. look for M in the package's imports, in the order they are
+   --    listed in the package descriptor (`pd.imports`)
+   --
+   -- the newly created require function is also added to the package
+   -- descriptor of `fqpn` (as `pd.require`)
+   --
+   -- the framework ensures that all modules of package P are loaded
+   -- with the require() function of P in their environment. this
+   -- guarantees that require() calls made by a module are resolved
+   -- using the dependency order of its own package.
    if seen[fqpn] then return end
    seen[fqpn] = true
    -- load package descriptor
    local pd = zz_require(fqpn..'/package')
+   -- the `loaders` table maps package names (either short or fully
+   -- qualified) to functions which return the corresponding package
    local loaders = {}
    pd.imports = pd.imports or {}
    local imports_seen = {}
    local function process_import(fqpn)
       if not imports_seen[fqpn] then
-         setup_require(fqpn, seen) -- generates dd.require()
-         local dd = zz_require(fqpn..'/package') -- loaded from cache
+         -- the following setup_require() call loads the package
+         -- descriptor of `fqpn`, annotates/extends it with various
+         -- fields (e.g. the package-specific require function) and
+         -- places it into the module cache. the next zz_require()
+         -- call fetches this annotated version from the cache.
+         setup_require(fqpn, seen)
+         local dd = zz_require(fqpn..'/package')
          -- modules exported by imported packages should be
-         -- requireable by their short name
-         dd.exports = dd.exports or {}
+         -- requireable by their short and fully qualified names
          for _,m in ipairs(dd.exports) do
             loaders[m] = dd.require            -- short
             loaders[fqpn..'/'..m] = dd.require -- fully qualified
@@ -60,7 +74,7 @@ local function setup_require(fqpn, seen)
    end
    -- the order of packages in pd.imports matters: if packages P1 and
    -- P2 both define module M but P2 comes *before* P1 in the import
-   -- list, require(M) will find the P2 version
+   -- list, require(M) shall find the P2 version
    --
    -- a specific module can pulled in by requiring the fully
    -- qualified module name e.g. "github.com/cellux/zz/util"
@@ -72,10 +86,12 @@ local function setup_require(fqpn, seen)
    process_import(ZZ_CORE_PACKAGE)
    -- create package-specific require function
    pd.require = function(m)
+      -- non-zz modules are handled by lj_require
       return (loaders[m] or lj_require)(m)
    end
-   -- each package gets its own global environment which overrides
-   -- require() with the package-specific version
+   -- each package gets its own environment which overrides require()
+   -- with the package-specific version and sets some global variables
+   -- to package-specific values
    local package_env = setmetatable({
       require = pd.require,
       ZZ_PACKAGE = pd.package,
@@ -88,15 +104,17 @@ local function setup_require(fqpn, seen)
       local m_loader = function()
          if not cached then
             -- in LuaJIT, the loader for linked bytecode is defined in
-            -- lib_package.c:lj_cf_package_loader_preload() which is
-            -- the first element of the package.loaders array
+            -- lib_package.c:lj_cf_package_loader_preload()
             --
-            -- if (when?) package.loaders changes, this will blow up
-            local preload = package.loaders[1]
-            local chunk = preload(mangled)
+            --- when I wrote this, lj_cf_package_loader_preload() was
+            --- the first element of the package.loaders array - if
+            --- (when?) its position changes, this will blow up
+            local lj_cf_package_loader_preload = package.loaders[1]
+            local chunk = lj_cf_package_loader_preload(mangled)
             -- ensure that require() calls inside the module use the
             -- containing package's require function
             setfenv(chunk, package_env)
+            -- execute the module chunk (shall return the module)
             cached = chunk()
          end
          return cached
@@ -109,16 +127,16 @@ local function setup_require(fqpn, seen)
    for _,m in ipairs(pd.exports) do
       process_export(m)
    end
-   -- require('package') shall return the extended/annotated package
-   -- descriptor we prepared above
+   -- require('package') inside package `fqpn` shall return the
+   -- extended/annotated package descriptor we prepared above
    local package_loader = function() return pd end
    loaders['package'] = package_loader
    loaders[fqpn..'/package'] = package_loader
    return pd.require
 end
 
--- ZZ_MAIN_PACKAGE is injected by the build system
-_G.require = setup_require(ZZ_MAIN_PACKAGE, {})
+-- ZZ_PACKAGE is injected by the build system
+_G.require = setup_require(ZZ_PACKAGE, {})
 
 require('globals')
 
@@ -140,6 +158,7 @@ local function run_module(mangled_module_name)
 end
 
 local function make_package_env()
+   -- load the cached version of the package descriptor
    local pd = require('package')
 
    assert(type(pd)=="table")
