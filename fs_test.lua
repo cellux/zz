@@ -23,6 +23,12 @@ testing("with_tmpdir", function()
    assert(not fs.exists(tmpdir_save))
 end)
 
+testing("open", function()
+   assert.throws('No such file or directory', function()
+      fs.open("nonexistentfile")
+   end)
+end)
+
 testing("read", function()
    -- read whole file at once
    local f = stream(fs.open('testdata/hello.txt'))

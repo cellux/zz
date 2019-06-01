@@ -68,6 +68,7 @@ union zz_async_process_req {
     int status;
     int options;
     pid_t rv;
+    int _errno;
   } waitpid;
 };
 
@@ -138,20 +139,20 @@ end
 
 function M.waitpid(pid, options)
    options = options or 0
-   local rv, status
+   local rv, status, errno
    if sched.ticking() then
       mm.with_block("union zz_async_process_req", nil, function(req, block_size)
          req.waitpid.pid = pid
          req.waitpid.options = options
          async.request(ASYNC_PROCESS, ffi.C.ZZ_ASYNC_PROCESS_WAITPID, req)
-         rv, status = req.waitpid.rv, req.waitpid.status
+         rv, status, errno = req.waitpid.rv, req.waitpid.status, req.waitpid._errno
       end)
    else
       local _status = ffi.new("int[1]")
       rv = ffi.C.waitpid(pid, _status, options)
       status = _status[0]
    end
-   return util.check_errno("waitpid", rv), extract_status(status)
+   return util.check_errno("waitpid", rv, errno), extract_status(status)
 end
 
 function M.create(opts)

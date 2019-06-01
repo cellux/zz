@@ -170,6 +170,7 @@ union zz_async_fs_req {
     int oflag;
     mode_t mode;
     int rv;
+    int _errno;
   } open;
 
   struct {
@@ -177,6 +178,7 @@ union zz_async_fs_req {
     void *buf;
     size_t count;
     ssize_t nbytes;
+    int _errno;
   } read, write;
 
   struct {
@@ -184,46 +186,54 @@ union zz_async_fs_req {
     off_t offset;
     int whence;
     off_t rv;
+    int _errno;
   } lseek;
 
   struct {
     int fd;
     int rv;
+    int _errno;
   } close;
 
   struct {
     int fd;
     struct timespec *times;
     int rv;
+    int _errno;
   } futimens;
 
   struct {
     char *path;
     int how;
     int rv;
+    int _errno;
   } access;
 
   struct {
     char *file;
     mode_t mode;
     int rv;
+    int _errno;
   } chmod;
 
   struct {
     char *filename;
     int rv;
+    int _errno;
   } unlink;
 
   struct {
     char *file;
     mode_t mode;
     int rv;
+    int _errno;
   } mkdir, rmdir;
 
   struct {
     char *oldname;
     char *newname;
     int rv;
+    int _errno;
   } symlink;
 
   struct {
@@ -231,18 +241,21 @@ union zz_async_fs_req {
     char *buffer;
     size_t size;
     ssize_t rv;
+    int _errno;
   } readlink;
 
   struct {
     char *name;
     char *resolved;
     char *rv;
+    int _errno;
   } realpath;
 
   struct {
     char *path;
     struct stat *buf;
     int rv;
+    int _errno;
   } stat;
 
   struct {
@@ -250,6 +263,7 @@ union zz_async_fs_req {
     DIR *dir;
     struct dirent *dirent;
     int rv;
+    int _errno;
   } opendir, readdir, closedir;
 
   struct {
@@ -270,19 +284,20 @@ local ASYNC_FS  = async.register_worker(ffi.C.zz_async_fs_handlers)
 local File_mt = {}
 
 local function lseek(fd, offset, whence)
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.lseek.fd = fd
          req.lseek.offset = offset
          req.lseek.whence = whence
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSEEK, req)
+         _errno = req.lseek._errno
          return req.lseek.rv
       end)
    else
       rv = ffi.C.lseek(fd, offset, whence)
    end
-   return util.check_errno("lseek", rv)
+   return util.check_errno("lseek", rv, _errno)
 end
 
 function File_mt:pos()
@@ -297,35 +312,37 @@ function File_mt:size()
 end
 
 function File_mt:read1(ptr, size)
-   local nbytes
+   local nbytes, _errno
    if sched.ticking() then
       mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.read.fd = self.fd
          req.read.buf = ptr
          req.read.count = size
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READ, req)
+         _errno = req.read._errno
          nbytes = req.read.nbytes
       end)
    else
       nbytes = ffi.C.read(self.fd, ptr, size)
    end
-   return util.check_errno("read1", nbytes)
+   return util.check_errno("read1", nbytes, _errno)
 end
 
 function File_mt:write1(ptr, size)
-   local nbytes
+   local nbytes, _errno
    if sched.ticking() then
       mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.write.fd = self.fd
          req.write.buf = ptr
          req.write.count = size
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_WRITE, req)
+         _errno = req.write._errno
          nbytes = req.write.nbytes
       end)
    else
       nbytes = ffi.C.write(self.fd, ptr, size)
    end
-   return util.check_errno("write1", nbytes)
+   return util.check_errno("write1", nbytes, _errno)
 end
 
 function File_mt:seek(offset, relative)
@@ -340,17 +357,18 @@ end
 
 function File_mt:close()
    if self.fd >= 0 then
-      local rv
+      local rv, _errno
       if sched.ticking() then
          rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
             req.close.fd = self.fd
             async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSE, req)
+            _errno = req.close._errno
             return req.close.rv
          end)
       else
          rv = ffi.C.close(self.fd)
       end
-      util.check_errno("close", rv)
+      util.check_errno("close", rv, _errno)
       self.fd = -1
    end
 end
@@ -388,23 +406,20 @@ local M = {}
 function M.open(path, flags, mode)
    flags = flags or ffi.C.O_RDONLY
    mode = mode or util.oct("666")
-   local fd
+   local fd, _errno
    if sched.ticking() then
       fd = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.open.file = ffi.cast("char*", path)
          req.open.oflag = flags
          req.open.mode = mode
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_OPEN, req)
+         _errno = req.open._errno
          return req.open.rv
       end)
    else
       fd = ffi.C.open(path, flags, mode)
    end
-   if fd == -1 then
-      error(sf("open(%s) failed: %s", path, errno.strerror()), 2)
-   else
-      return File(fd)
-   end
+   return File(util.check_errno("open", fd, _errno))
 end
 
 function M.fd(fd)
@@ -433,20 +448,23 @@ function M.touch(path)
                          ffi.C.O_NOCTTY,
                          ffi.C.O_NONBLOCK,
                          ffi.C.O_LARGEFILE)
+   -- TODO: ensure f is closed on all code paths
    local f = M.open(path, flags)
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.futimens.fd = f.fd
          req.futimens.times = ffi.cast("struct timespec*", nil)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_FUTIMENS, req)
+         _errno = req.futimens._errno
          return req.futimens.rv
       end)
    else
       rv = ffi.C.futimens(f.fd, nil)
+      _errno = errno.errno()
    end
-   util.check_errno("futimens", rv)
    f:close()
+   util.check_errno("futimens", rv, _errno)
 end
 
 function M.mkstemp(filename_prefix, tmpdir)
@@ -488,29 +506,39 @@ end
 local Stat_mt = {}
 
 function Stat_mt:stat(path)
+   local rv, _errno
    if sched.ticking() then
-      return mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.stat.path = ffi.cast("char*", path)
          req.stat.buf = self.buf
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_STAT, req)
+         _errno = req.stat._errno
          return req.stat.rv
       end)
    else
-      return ffi.C.zz_fs_stat(path, self.buf)
+      rv = ffi.C.zz_fs_stat(path, self.buf)
+      _errno = errno.errno()
    end
+   -- checking errno is the responsibility of the caller
+   return rv, _errno
 end
 
 function Stat_mt:lstat(path)
+   local rv, _errno
    if sched.ticking() then
-      return mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.stat.path = ffi.cast("char*", path)
          req.stat.buf = self.buf
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_LSTAT, req)
+         _errno = req.stat._errno
          return req.stat.rv
       end)
    else
-      return ffi.C.zz_fs_lstat(path, self.buf)
+      rv = ffi.C.zz_fs_lstat(path, self.buf)
+      _errno = errno.errno()
    end
+   -- checking errno is the responsibility of the caller
+   return rv, _errno
 end
 
 local Stat_accessors = {
@@ -592,36 +620,49 @@ local Stat = ffi.metatype("struct zz_fs_Stat_ct", Stat_mt)
 local Dir_mt = {}
 
 function Dir_mt:read()
-   local entry
+   local entry, _errno
    if sched.ticking() then
       entry = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.readdir.dir = self.dir
+         -- the C code sets errno to 0 before the readdir() call
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READDIR, req)
+         _errno = req.readdir._errno
          return req.readdir.dirent
       end)
    else
+      -- readdir() returns a pointer which can be NULL both at EOD
+      -- (end of directory) and when an error happens
+      --
+      -- the only way to check what happened is to set errno to zero
+      -- before the call and then check if it's still zero afterwards
+      errno.seterrno(0)
       entry = ffi.C.readdir(self.dir)
    end
    if entry ~= nil then
       return ffi.string(ffi.C.zz_fs_dirent_name(entry))
    else
+      _errno = _errno or errno.errno()
+      if _errno ~= 0 then
+         util.check_errno("readdir", -1, _errno)
+      end
       return nil
    end
 end
 
 function Dir_mt:close()
    if self.dir ~= nil then
-      local rv
+      local rv, _errno
       if sched.ticking() then
          rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
             req.closedir.dir = self.dir
             async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CLOSEDIR, req)
+            _errno = req.closedir._errno
             return req.closedir.rv
          end)
       else
          rv = ffi.C.closedir(self.dir)
       end
-      util.check_ok("closedir", 0, rv)
+      util.check_errno("closedir", rv, _errno)
       self.dir = nil
    end
    return 0
@@ -633,17 +674,22 @@ Dir_mt.__index = Dir_mt
 local Dir = ffi.metatype("struct zz_fs_Dir_ct", Dir_mt)
 
 function M.opendir(path)
-   local dir
+   local dir, _errno
    if sched.ticking() then
       dir = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.opendir.path = ffi.cast("char*", path)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_OPENDIR, req)
+         _errno = req.opendir._errno
          return req.opendir.dir
       end)
    else
       dir = ffi.C.opendir(path)
    end
-   return Dir(util.check_bad("opendir", nil, dir))
+   if dir ~= nil then
+      return Dir(dir)
+   else
+      util.check_errno("opendir", -1, _errno)
+   end
 end
 
 function M.readdir(path)
@@ -659,18 +705,20 @@ function M.readdir(path)
 end
 
 local function access(path, how)
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.access.path = ffi.cast("char*", path)
          req.access.how = how
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_ACCESS, req)
+         _errno = req.access._errno
          return req.access.rv
       end)
    else
       rv = ffi.C.access(path, how)
+      _errno = errno.errno()
    end
-   return rv
+   return rv, _errno
 end
 
 function M.exists(path)
@@ -691,19 +739,29 @@ end
 
 function M.stat(path)
    local s = Stat(ffi.C.zz_fs_Stat_new())
-   if s:stat(path)==0 then
+   local rv, _errno = s:stat(path)
+   if rv == 0 then
       return s
-   else
+   elseif _errno == ffi.C.ENOENT then
+      -- stat for non-existent file returns nil
       return nil
+   else
+      -- all other errors result in an exception
+      util.check_errno("stat", rv, _errno)
    end
 end
 
 function M.lstat(path)
    local s = Stat(ffi.C.zz_fs_Stat_new())
-   if s:lstat(path)==0 then
+   local rv, _errno = s:lstat(path)
+   if rv == 0 then
       return s
-   else
+   elseif _errno == ffi.C.ENOENT then
+      -- lstat for non-existent file returns nil
       return nil
+   else
+      -- all other errors result in an exception
+      util.check_errno("lstat", rv, _errno)
    end
 end
 
@@ -727,98 +785,100 @@ create_type_checker("fifo")
 create_type_checker("sock")
 
 function M.chmod(path, mode)
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.chmod.file = ffi.cast("char*", path)
          req.chmod.mode = mode
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_CHMOD, req)
+         _errno = req.chmod._errno
          return req.chmod.rv
       end)
    else
       rv = ffi.C.chmod(path, mode)
    end
-   -- TODO: errno can change while we get here
-   return util.check_errno("chmod", rv)
+   return util.check_errno("chmod", rv, _errno)
 end
 
 function M.unlink(path)
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.unlink.filename = ffi.cast("char*", path)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_UNLINK, req)
+         _errno = req.unlink._errno
          return req.unlink.rv
       end)
    else
       rv = ffi.C.unlink(path)
    end
-   -- TODO: errno can change while we get here
-   return util.check_errno("unlink", rv)
+   return util.check_errno("unlink", rv, _errno)
 end
 
 function M.mkdir(path, mode)
    mode = mode or util.oct("777")
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.mkdir.file = ffi.cast("char*", path)
          req.mkdir.mode = mode
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_MKDIR, req)
+         _errno = req.mkdir._errno
          return req.mkdir.rv
       end)
    else
       rv = ffi.C.mkdir(path, mode)
    end
-   -- TODO: errno can change while we get here
-   return util.check_errno("mkdir", rv)
+   return util.check_errno("mkdir", rv, _errno)
 end
 
 function M.rmdir(path)
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.rmdir.file = ffi.cast("char*", path)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_RMDIR, req)
+         _errno = req.rmdir._errno
          return req.rmdir.rv
       end)
    else
       rv = ffi.C.rmdir(path)
    end
-   -- TODO: errno can change while we get here
-   return util.check_errno("rmdir", rv)
+   return util.check_errno("rmdir", rv, _errno)
 end
 
 function M.symlink(oldname, newname)
-   local rv
+   local rv, _errno
    if sched.ticking() then
       rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.symlink.oldname = ffi.cast("char*", oldname)
          req.symlink.newname = ffi.cast("char*", newname)
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_SYMLINK, req)
+         _errno = req.symlink._errno
          return req.symlink.rv
       end)
    else
       rv = ffi.C.symlink(oldname, newname)
    end
-   -- TODO: errno can change while we get here
-   return util.check_errno("symlink", rv)
+   return util.check_errno("symlink", rv, _errno)
 end
 
 function M.readlink(filename)
    return mm.with_block(PATH_MAX, nil, function(buf, block_size)
-      local size
+      local size, _errno
       if sched.ticking() then
          size = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
             req.readlink.filename = ffi.cast("char*", filename)
             req.readlink.buffer = buf
             req.readlink.size = PATH_MAX
             async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_READLINK, req)
+            _errno = req.readlink._errno
             return req.readlink.rv
          end)
       else
          size = ffi.C.readlink(filename, buf, PATH_MAX)
       end
+      util.check_errno("readlink", size, _errno)
       if size == PATH_MAX then
          ef("readlink: buffer overflow for filename: %s", filename)
       end
@@ -827,12 +887,13 @@ function M.readlink(filename)
 end
 
 function M.realpath(name)
-   local ptr
+   local ptr, _errno
    if sched.ticking() then
       ptr = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
          req.realpath.name = ffi.cast("char*", name)
          req.realpath.resolved = nil
          async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_REALPATH, req)
+         _errno = req.realpath._errno
          return req.realpath.rv
       end)
    else
@@ -843,7 +904,7 @@ function M.realpath(name)
       ffi.C.free(ptr)
       return rv
    else
-      ef("realpath() failed: %s: %s", name, errno.strerror())
+      util.check_errno("realpath", -1, _errno)
    end
 end
 

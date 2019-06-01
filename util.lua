@@ -522,9 +522,9 @@ function M.check_bad(funcname, badvalue, rv)
    end
 end
 
-function M.check_errno(funcname, rv)
+function M.check_errno(funcname, rv, _errno)
    if rv == -1 then
-      local _errno = errno.errno()
+      _errno = _errno or errno.errno()
       local message = sf("%s() failed: %s", funcname, errno.strerror(_errno))
       local context = { errno = _errno }
       M.throwat(2, "check_errno", message, context)

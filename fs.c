@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include <assert.h>
 #include <glob.h>
+#include <errno.h>
 
 enum {
   ZZ_ASYNC_FS_OPEN,
@@ -36,6 +37,7 @@ union zz_async_fs_req {
     int oflag;
     mode_t mode;
     int rv;
+    int _errno;
   } open;
 
   struct {
@@ -43,6 +45,7 @@ union zz_async_fs_req {
     void *buf;
     size_t count;
     ssize_t nbytes;
+    int _errno;
   } read, write;
 
   struct {
@@ -50,46 +53,54 @@ union zz_async_fs_req {
     off_t offset;
     int whence;
     off_t rv;
+    int _errno;
   } lseek;
 
   struct {
     int fd;
     int rv;
+    int _errno;
   } close;
 
   struct {
     int fd;
     struct timespec *times;
     int rv;
+    int _errno;
   } futimens;
 
   struct {
     char *path;
     int how;
     int rv;
+    int _errno;
   } access;
 
   struct {
     char *file;
     mode_t mode;
     int rv;
+    int _errno;
   } chmod;
 
   struct {
     char *filename;
     int rv;
+    int _errno;
   } unlink;
 
   struct {
     char *file;
     mode_t mode;
     int rv;
+    int _errno;
   } mkdir, rmdir;
 
   struct {
     char *oldname;
     char *newname;
     int rv;
+    int _errno;
   } symlink;
 
   struct {
@@ -97,18 +108,21 @@ union zz_async_fs_req {
     char *buffer;
     size_t size;
     ssize_t rv;
+    int _errno;
   } readlink;
 
   struct {
     char *name;
     char *resolved;
     char *rv;
+    int _errno;
   } realpath;
 
   struct {
     char *path;
     struct stat *buf;
     int rv;
+    int _errno;
   } stat;
 
   struct {
@@ -116,6 +130,7 @@ union zz_async_fs_req {
     DIR *dir;
     struct dirent *dirent;
     int rv;
+    int _errno;
   } opendir, readdir, closedir;
 
   struct {
@@ -129,58 +144,72 @@ union zz_async_fs_req {
 
 void zz_async_fs_open(union zz_async_fs_req *req) {
   req->open.rv = open(req->open.file, req->open.oflag, req->open.mode);
+  req->open._errno = errno;
 }
 
 void zz_async_fs_read(union zz_async_fs_req *req) {
   req->read.nbytes = read(req->read.fd, req->read.buf, req->read.count);
+  req->read._errno = errno;
 }
 
 void zz_async_fs_write(union zz_async_fs_req *req) {
   req->write.nbytes = write(req->write.fd, req->write.buf, req->write.count);
+  req->write._errno = errno;
 }
 
 void zz_async_fs_lseek(union zz_async_fs_req *req) {
   req->lseek.rv = lseek(req->lseek.fd, req->lseek.offset, req->lseek.whence);
+  req->lseek._errno = errno;
 }
 
 void zz_async_fs_close(union zz_async_fs_req *req) {
   req->close.rv = close(req->close.fd);
+  req->close._errno = errno;
 }
 
 void zz_async_fs_futimens(union zz_async_fs_req *req) {
   req->futimens.rv = futimens(req->futimens.fd, req->futimens.times);
+  req->futimens._errno = errno;
 }
 
 void zz_async_fs_access(union zz_async_fs_req *req) {
   req->access.rv = access(req->access.path, req->access.how);
+  req->access._errno = errno;
 }
 
 void zz_async_fs_chmod(union zz_async_fs_req *req) {
   req->chmod.rv = chmod(req->chmod.file, req->chmod.mode);
+  req->chmod._errno = errno;
 }
 
 void zz_async_fs_unlink(union zz_async_fs_req *req) {
   req->unlink.rv = unlink(req->unlink.filename);
+  req->unlink._errno = errno;
 }
 
 void zz_async_fs_mkdir(union zz_async_fs_req *req) {
   req->mkdir.rv = mkdir(req->mkdir.file, req->mkdir.mode);
+  req->mkdir._errno = errno;
 }
 
 void zz_async_fs_rmdir(union zz_async_fs_req *req) {
   req->rmdir.rv = rmdir(req->rmdir.file);
+  req->rmdir._errno = errno;
 }
 
 void zz_async_fs_symlink(union zz_async_fs_req *req) {
   req->symlink.rv = symlink(req->symlink.oldname, req->symlink.newname);
+  req->symlink._errno = errno;
 }
 
 void zz_async_fs_readlink(union zz_async_fs_req *req) {
   req->readlink.rv = readlink(req->readlink.filename, req->readlink.buffer, req->readlink.size);
+  req->readlink._errno = errno;
 }
 
 void zz_async_fs_realpath(union zz_async_fs_req *req) {
   req->realpath.rv = realpath(req->realpath.name, req->realpath.resolved);
+  req->realpath._errno = errno;
 }
 
 struct stat * zz_fs_Stat_new() {
@@ -241,22 +270,28 @@ const char * zz_fs_type(mode_t mode) {
 
 void zz_async_fs_stat(union zz_async_fs_req *req) {
   req->stat.rv = stat(req->stat.path, req->stat.buf);
+  req->stat._errno = errno;
 }
 
 void zz_async_fs_lstat(union zz_async_fs_req *req) {
   req->stat.rv = lstat(req->stat.path, req->stat.buf);
+  req->stat._errno = errno;
 }
 
 void zz_async_fs_opendir(union zz_async_fs_req *req) {
   req->opendir.dir = opendir(req->opendir.path);
+  req->opendir._errno = errno;
 }
 
 void zz_async_fs_readdir(union zz_async_fs_req *req) {
+  errno = 0;
   req->readdir.dirent = readdir(req->readdir.dir);
+  req->readdir._errno = errno;
 }
 
 void zz_async_fs_closedir(union zz_async_fs_req *req) {
   req->closedir.rv = closedir(req->closedir.dir);
+  req->closedir._errno = errno;
 }
 
 void zz_async_fs_glob(union zz_async_fs_req *req) {
