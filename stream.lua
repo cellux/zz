@@ -180,6 +180,12 @@ function Stream:read(n)
    return buf
 end
 
+function Stream:slurp()
+   local data = self:read(0)
+   self:close()
+   return data
+end
+
 function Stream:unread(data)
    local rbl = self.read_buffer:length()
    if rbl == 0 then
