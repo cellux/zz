@@ -151,6 +151,11 @@ function M.errno()
    return errno_location[0]
 end
 
+function M.seterrno(value)
+   local errno_location = ffi.C.__errno_location()
+   errno_location[0] = value
+end
+
 function M.strerror(errnum)
    errnum = errnum or M.errno()
    local mm = require('mm')
