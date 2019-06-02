@@ -62,7 +62,17 @@ function Test:with_tmpdir()
   return self
 end
 
+function Test:skip()
+  self.opts.skip = true
+  return self
+end
+
 function Test:run(tc, report)
+   if self.opts.skip then
+      self.ok = true
+      report(self)
+      return
+   end
    local function run()
       self.ok, self.err = util.pcall(self.testfn, tc)
       report(self)
@@ -122,6 +132,10 @@ end
 
 function TestSuite:with_tmpdir(...)
    return self:add(...):with_tmpdir()
+end
+
+function TestSuite:skip(...)
+   return self:add(...):skip()
 end
 
 function TestSuite:add_hook(name, fn)

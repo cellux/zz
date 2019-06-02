@@ -248,8 +248,17 @@ s:with_tmpdir('with_tmpdir', function(ctx)
    ctx.save_tmpdir_path(ctx.tmpdir)
 end)
 
--- test options (i.e. `exclusive`, `nosched`, `with_tmpdir`) may be
--- also passed after the test function in an opts table
+-- tests may be skipped by specifying the `skip` option
+local nomod = 1
+testing:skip('this is skipped', function()
+   nomod = 2
+end)
+testing:after(function()
+   assert.equals(nomod, 1)
+end)
+
+-- test options (i.e. `exclusive`, `nosched`, `with_tmpdir`, `skip`)
+-- may be also passed after the test function in an opts table
 
 testing('opts table', function(ctx)
    assert(not sched.running())
