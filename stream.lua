@@ -353,27 +353,25 @@ local function make_stream(x)
    end
 end
 
-function M.copy(s1, s2, cb)
+function M.copy(s1, s2)
    s1 = make_stream(s1)
    s2 = make_stream(s2)
-   return sched(function()
-      mm.with_block(M.READ_BLOCK_SIZE, nil, function(ptr, block_size)
-         while not s1:eof() do
-            local nbytes = s1:read1(ptr, block_size)
-            s2:write1(ptr, nbytes)
-         end
-      end)
-      s1:close()
-      if cb then
-         cb()
+   mm.with_block(M.READ_BLOCK_SIZE, nil, function(ptr, block_size)
+      while not s1:eof() do
+         local nbytes = s1:read1(ptr, block_size)
+         s2:write1(ptr, nbytes)
       end
    end)
 end
 
 function M.pipe(s1, s2)
-   s1 = make_stream(s1)
-   s2 = make_stream(s2)
-   return M.copy(s1, s2, function() s2:close() end)
+   return sched(function()
+      s1 = make_stream(s1)
+      s2 = make_stream(s2)
+      M.copy(s1, s2)
+      s1:close()
+      s2:close()
+   end)
 end
 
 function M.duplex(input, output)

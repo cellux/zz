@@ -7,6 +7,7 @@ local net = require('net')
 local util = require('util')
 local digest = require('digest')
 local sched = require('sched')
+local ffi = require('ffi')
 local re = require('re')
 
 testing("memory streams (fifos)", function()
@@ -226,4 +227,38 @@ testing("slurp", function()
    local data = s:slurp() -- f:slurp() = f:read(0) + f:close()
    assert.equals(data,fs.readfile("testdata/arborescence.jpg"))
    assert(f.fd == -1)
+end)
+
+testing:with_tmpdir("stream.copy", function(ctx)
+   local f1 = fs.open("testdata/arborescence.jpg")
+   local f2 = fs.open(fs.join(ctx.tmpdir, "out.jpg"),
+                      bit.bor(ffi.C.O_CREAT, ffi.C.O_WRONLY))
+   local s1 = stream(f1)
+   local s2 = stream(f2)
+   -- copy is synchronous
+   stream.copy(s1, s2)
+   -- copy does not close either streams
+   assert(f1.fd > 0)
+   f1:close()
+   assert(f2.fd > 0)
+   f2:close()
+   assert.equals(fs.readfile("testdata/arborescence.jpg"),
+                 fs.readfile(fs.join(ctx.tmpdir, "out.jpg")))
+end)
+
+testing:with_tmpdir("stream.pipe", function(ctx)
+   local f1 = fs.open("testdata/arborescence.jpg")
+   local f2 = fs.open(fs.join(ctx.tmpdir, "out.jpg"),
+                      bit.bor(ffi.C.O_CREAT, ffi.C.O_WRONLY))
+   local s1 = stream(f1)
+   local s2 = stream(f2)
+   -- pipe is asynchronous
+   -- it returns the thread which is running the copy
+   local thread = stream.pipe(s1, s2)
+   sched.join(thread) -- wait for copy to finish
+   -- pipe closes both streams
+   assert(f1.fd == -1)
+   assert(f2.fd == -1)
+   assert.equals(fs.readfile("testdata/arborescence.jpg"),
+                 fs.readfile(fs.join(ctx.tmpdir, "out.jpg")))
 end)
