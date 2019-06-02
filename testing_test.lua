@@ -247,3 +247,18 @@ s:with_tmpdir('with_tmpdir', function(ctx)
    -- (a variable set in ctx would not be seen in the parent)
    ctx.save_tmpdir_path(ctx.tmpdir)
 end)
+
+-- test options (i.e. `exclusive`, `nosched`, `with_tmpdir`) may be
+-- also passed after the test function in an opts table
+
+testing('opts table', function(ctx)
+   assert(not sched.running())
+   assert(fs.is_dir(ctx.tmpdir))
+end, { nosched = true, exclusive = true, with_tmpdir = true })
+
+-- the two ways of setting options can be mixed
+
+testing:nosched('opts table 2', function(ctx)
+   assert(not sched.running())
+   assert(fs.is_dir(ctx.tmpdir))
+end, { exclusive = true, with_tmpdir = true })

@@ -112,16 +112,16 @@ function TestSuite:add(name, testfn, opts)
    end
 end
 
-function TestSuite:exclusive(name, testfn)
-   return self:add(name, testfn):exclusive()
+function TestSuite:exclusive(...)
+   return self:add(...):exclusive()
 end
 
-function TestSuite:nosched(name, testfn)
-   return self:add(name, testfn):nosched()
+function TestSuite:nosched(...)
+   return self:add(...):nosched()
 end
 
-function TestSuite:with_tmpdir(name, testfn)
-   return self:add(name, testfn):with_tmpdir()
+function TestSuite:with_tmpdir(...)
+   return self:add(...):with_tmpdir()
 end
 
 function TestSuite:add_hook(name, fn)
