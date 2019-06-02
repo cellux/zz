@@ -1,5 +1,6 @@
 local assert = require('assert')
 local sched = require('sched')
+local fs = require('fs')
 
 local testing = require('testing')
 -- the return value of this require() call is a top-level TestSuite
@@ -35,7 +36,23 @@ testing('the testing() shorthand', function()
    markers.threeisthree = true
 end)
 
-testing('markers', function()
+-- tests within a suite are not guaranteed to run sequentially
+--
+-- the only thing we can guarantee (for the current implementation) is
+-- that tests in child suites are _scheduled_ later than tests of the
+-- parent suite
+
+testing(function()
+   assert.equals(markers, {
+      oneisone = true,
+      threeisthree = true
+   })
+end)
+
+-- if you want to do something after all tests in a suite finished,
+-- use an after hook:
+
+testing:after(function()
    assert.equals(markers, {
       oneisone = true,
       twoistwo = true,
@@ -96,7 +113,7 @@ end)
 -- tests marked as `nosched` are executed upfront in a separate round,
 -- when the scheduler has not yet been created
 --
--- this feature is mostly (only?) useful when testing the scheduler
+-- this feature is mostly (only?) useful for testing the scheduler
 -- itself
 
 testing('running under a scheduler', function()
@@ -180,6 +197,19 @@ suite:after(function()
    assert.equals(counter, 0)
 end)
 
+-- nosched tests cannot use before/after hooks
+
+suite:nosched('nosched tests cannot use before/after hooks', function(ctx)
+   assert.is_nil(ctx.conn)
+   assert.is_nil(ctx.http_client)
+end)
+
+-- but they can use before_each and after_each
+
+suite:nosched('nosched tests can use before_each/after_each hooks', function(ctx)
+  assert.equals(counter, 1)
+end)
+
 -- the test context provides a nextid() method which can be used to
 -- generate an integer guaranteed to be unique within the current test
 -- run
@@ -190,4 +220,30 @@ testing('nextid', function(ctx)
    local id2 = ctx:nextid()
    assert.type(id2, 'number')
    assert(id1 ~= id2)
+end)
+
+-- tests marked as `with_tmpdir` get a temporary directory which is
+-- automatically removed when the test finishes (or fails)
+--
+-- the path of the temp directory is available as ctx.tmpdir
+
+local s = testing('with_tmpdir')
+s:before(function(ctx)
+   assert.is_nil(ctx.saved_tmpdir_path)
+   ctx.save_tmpdir_path = function(path)
+      ctx.saved_tmpdir_path = path
+   end
+end)
+s:after(function(ctx)
+   assert.type(ctx.saved_tmpdir_path, "string")
+   -- verify that the temp dir was removed
+   assert(not fs.is_dir(ctx.saved_tmpdir_path))
+end)
+s:with_tmpdir('with_tmpdir', function(ctx)
+   -- the temp directory path is at ctx.tmpdir
+   assert.type(ctx.tmpdir, "string")
+   assert(fs.is_dir(ctx.tmpdir))
+   -- save_tmpdir_path() is inherited from parent context
+   -- (a variable set in ctx would not be seen in the parent)
+   ctx.save_tmpdir_path(ctx.tmpdir)
 end)

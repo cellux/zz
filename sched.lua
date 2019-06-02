@@ -113,6 +113,7 @@ local function EventIdGenerator()
       else
          event_id = next_event_id
          if next_event_id == last_event_id then
+            pf("event id turnaround detected. fingers crossed.")
             -- we can just hope that this is ok
             next_event_id = first_event_id
          else
@@ -567,7 +568,7 @@ local function Scheduler() -- scheduler constructor
       end
       for _,t in ipairs(threadlist) do
          if type(t) ~= "thread" then
-            ef("self.join() called with non-thread arg")
+            ef("sched.join() called with non-thread arg")
          end
          if coroutine.status(t) ~= "dead" then
             self.on(t, thread_is_dead)

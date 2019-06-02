@@ -1,4 +1,5 @@
 local util = require('util')
+local fs = require('fs')
 
 local function fdcount()
    local fs = require('fs')
@@ -56,9 +57,24 @@ function Test:is_nosched()
    return self.opts.nosched
 end
 
+function Test:with_tmpdir()
+  self.opts.with_tmpdir = true
+  return self
+end
+
 function Test:run(tc, report)
-   self.ok, self.err = util.pcall(self.testfn, tc)
-   report(self)
+   local function run()
+      self.ok, self.err = util.pcall(self.testfn, tc)
+      report(self)
+   end
+   if self.opts.with_tmpdir then
+      fs.with_tmpdir(function(tmpdir)
+         tc.tmpdir = tmpdir
+         run()
+      end)
+   else
+      run()
+   end
 end
 
 -- TestSuite
@@ -102,6 +118,10 @@ end
 
 function TestSuite:nosched(name, testfn)
    return self:add(name, testfn):nosched()
+end
+
+function TestSuite:with_tmpdir(name, testfn)
+   return self:add(name, testfn):with_tmpdir()
 end
 
 function TestSuite:add_hook(name, fn)
@@ -152,7 +172,7 @@ end
 function TestSuite:run(process, test_filter, tc, report)
    -- each suite has its own subcontext which inherits from the parent
    tc = util.chainlast({}, tc)
-   self:run_hooks('before', tc)
+   --self:run_hooks('before', tc)
    for _,ts in ipairs(self.child_suites) do
       ts:run(process, test_filter, tc, report)
    end
@@ -161,7 +181,28 @@ function TestSuite:run(process, test_filter, tc, report)
          process(t, self, tc, report)
       end
    end
-   self:run_hooks('after', tc)
+   --self:run_hooks('after', tc)
+end
+
+function TestSuite:sched(process, test_filter, tc, report)
+   local sched = require('sched')
+   local function run()
+      tc = util.chainlast({}, tc)
+      self:run_hooks('before', tc)
+      local threads = {}
+      for _,ts in ipairs(self.child_suites) do
+         table.insert(threads, ts:sched(process, test_filter, tc, report))
+      end
+      for _,t in ipairs(self.tests) do
+         if test_filter == nil or test_filter(t) then
+            -- for sched tests, process() returns the scheduled thread
+            table.insert(threads, process(t, self, tc, report))
+         end
+      end
+      sched.join(threads)
+      self:run_hooks('after', tc)
+   end
+   return sched(run)
 end
 
 function TestSuite:run_test(t, tc, report)
@@ -189,16 +230,18 @@ function TestSuite:run_sched_tests(tc, report)
       local function run_test()
          ts:run_test(t, tc, report)
       end
+      local thread
       if t:is_exclusive() then
-         sched.exclusive(run_test)
+         thread = sched.exclusive(run_test)
       else
-         sched(run_test)
+         thread = sched(run_test)
       end
+      return thread
    end
    local function test_filter(t)
       return not t:is_nosched()
    end
-   self:run(process, test_filter, tc, report)
+   self:sched(process, test_filter, tc, report)
    sched()
 end
 
