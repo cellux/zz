@@ -1,4 +1,5 @@
 local ffi = require('ffi')
+local bit = require('bit')
 local sched = require('sched')
 local util = require('util')
 local buffer = require('buffer')
@@ -267,14 +268,19 @@ function Stream:match(pattern)
    return nil
 end
 
-function Stream:read_char()
-   local ch
+function Stream:read_byte()
+   local byte
    self.read_buffer:fill(self)
    if self.read_buffer:length() > 0 then
-      ch = string.char(self.read_buffer:ptr()[0])
+      byte = self.read_buffer:ptr()[0]
       self.read_buffer:consume(1)
    end
-   return ch
+   return byte
+end
+
+function Stream:read_char()
+   local byte = self:read_byte()
+   return byte and string.char(byte) or nil
 end
 
 function Stream:readln(eol)
@@ -301,6 +307,42 @@ end
 function Stream:writeln(line, eol)
    self:write(tostring(line))
    self:write(eol or "\x0a")
+end
+
+function Stream:read_be(nbytes)
+   local rv = 0
+   for i=1,nbytes do
+      rv = bit.bor(bit.lshift(rv, 8), self:read_byte())
+   end
+   return rv
+end
+
+local function be2le(nbytes, value)
+   while nbytes < 4 do
+      value = bit.lshift(value, 8)
+      nbytes = nbytes + 1
+   end
+   return bit.bswap(value)
+end
+
+function Stream:read_le(nbytes)
+   local value = self:read_be(nbytes)
+   return be2le(nbytes, value)
+end
+
+function Stream:write_le(nbytes, value)
+   return mm.with_block(nbytes, "uint8_t*", function(ptr, block_size)
+      for i=1,nbytes do
+         ptr[i-1] = bit.band(value, 0xff)
+         value = bit.rshift(value, 8)
+      end
+      return self:write1(ptr, nbytes)
+   end)
+end
+
+function Stream:write_be(nbytes, value)
+   value = be2le(nbytes, value)
+   return self:write_le(nbytes, value)
 end
 
 local function MemoryStream()
