@@ -2,6 +2,7 @@ local testing = require('testing')('mm')
 local mm = require('mm')
 local sched = require('sched')
 local util = require('util')
+local ffi = require('ffi')
 local assert = require('assert')
 
 testing("BlockPool", function()
@@ -48,4 +49,28 @@ testing("BlockPool", function()
       total = total + block_size * count
    end
    assert.equals(pool:arena_allocated_bytes(), total)
+end)
+
+testing("with_block_1", function()
+   local rv = mm.with_block(200, "uint8_t*", function(ptr, block_size)
+      assert(ffi.istype("uint8_t*", ptr))
+      -- BlockPool only allocates blocks with size = 2^n
+      assert.equals(block_size, 256)
+      return 100
+   end)
+   assert.equals(rv, 100)
+end)
+
+ffi.cdef [[
+struct zz_mm_test_t {
+  uint16_t a;
+  uint32_t b;
+};
+]]
+
+testing("with_block_2", function()
+   mm.with_block("struct zz_mm_test_t", nil, function(ptr, block_size)
+      assert(ffi.istype("struct zz_mm_test_t*", ptr))
+      assert.equals(block_size, 8)
+   end)
 end)
