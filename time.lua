@@ -1,4 +1,6 @@
 local ffi = require('ffi')
+local mm = require('mm')
+local util = require('util')
 
 ffi.cdef [[
 
@@ -42,6 +44,21 @@ struct timezone {
   int tz_dsttime;
 };
 
+struct tm
+{
+  int sec;          /* Seconds.	[0-60] (1 leap second) */
+  int min;          /* Minutes.	[0-59] */
+  int hour;         /* Hours.	[0-23] */
+  int mday;         /* Day.		[1-31] */
+  int mon;          /* Month.	[0-11] */
+  int year;         /* Year	- 1900.  */
+  int wday;         /* Day of week.	[0-6] */
+  int yday;         /* Days in year.[0-365]	*/
+  int isdst;        /* DST.		[-1/0/1]*/
+  long int gmtoff;	/* Seconds east of UTC.  */
+  const char *zone; /* Timezone abbreviation.  */
+};
+
 int gettimeofday (struct timeval *TP,
                   struct timezone *TZP);
 
@@ -49,6 +66,12 @@ int nanosleep (const struct timespec *requested_time,
                struct timespec *remaining);
 
 int clock_gettime(clockid_t clk_id, struct timespec *tp);
+
+struct tm * gmtime_r (const time_t *TIME, struct tm *RESULTP);
+struct tm * localtime_r (const time_t *TIME, struct tm *RESULTP);
+
+time_t timelocal (struct tm *BROKENTIME);
+time_t timegm (struct tm *BROKENTIME);
 
 ]]
 
@@ -87,6 +110,48 @@ function M.sleep(seconds)
    else
       M.nanosleep(seconds)
    end
+end
+
+local BrokenTime_mt = {}
+
+function BrokenTime_mt:timelocal()
+   return tonumber(ffi.C.timelocal(self))
+end
+
+function BrokenTime_mt:timegm()
+   return tonumber(ffi.C.timegm(self))
+end
+
+BrokenTime_mt.__index = BrokenTime_mt
+
+local BrokenTime = ffi.metatype("struct tm", BrokenTime_mt)
+
+function M.gmtime(seconds_since_epoch)
+   seconds_since_epoch = seconds_since_epoch or M.time()
+   local tm = ffi.new("struct tm")
+   mm.with_block("time_t", nil, function(ptr, block_size)
+      ptr[0] = seconds_since_epoch
+      local rv = ffi.C.gmtime_r(ptr, tm)
+      if rv == nil then
+         util.check_errno("gmtime_r", -1)
+      end
+      assert(rv == tm)
+   end)
+   return BrokenTime(tm)
+end
+
+function M.localtime(seconds_since_epoch)
+   seconds_since_epoch = seconds_since_epoch or M.time()
+   local tm = ffi.new("struct tm")
+   mm.with_block("time_t", nil, function(ptr, block_size)
+      ptr[0] = seconds_since_epoch
+      local rv = ffi.C.localtime_r(ptr, tm)
+      if rv == nil then
+         util.check_errno("localtime_r", -1)
+      end
+      assert(rv == tm)
+   end)
+   return BrokenTime(tm)
 end
 
 return setmetatable(M, { __index = ffi.C })

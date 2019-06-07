@@ -54,3 +54,39 @@ testing("sleep", function()
    local expected = { 5, 10, 2, 4, 15, 6, 20, 8, 25 }
    assert.equals(coll, expected)
 end)
+
+testing("gmtime", function()
+   local t = time.gmtime(1234567890)
+   -- 2009-02-13 Friday, 23:31:30 UTC
+   assert.equals(t.sec, 30)
+   assert.equals(t.min, 31)
+   assert.equals(t.hour, 23)
+   assert.equals(t.mday, 13)
+   assert.equals(t.mon, 1) -- 0: January, 1: February
+   assert.equals(t.year, 109) -- 0: 1900, 109: 2009
+   assert.equals(t.wday, 5) -- 0: Sunday, 5: Friday
+   assert.equals(t.yday, 43) -- 0: Jan 1, 43: Feb 13
+   assert.equals(t:timegm(), 1234567890)
+
+   -- with no argument it uses current time
+   local diff = time.gmtime():timegm() - time.gmtime(time.time()):timegm()
+   assert(math.abs(diff) <= 1)
+end)
+
+testing("localtime", function()
+   local t = time.localtime(1234567890)
+   -- 2009-02-13 Friday, 23:31:30 UTC
+   assert.equals(t.sec, 30)
+   assert.equals(t.min, 31)
+   --assert.equals(t.hour, 23)
+   --assert.equals(t.mday, 13)
+   assert.equals(t.mon, 1) -- 0: January, 1: February
+   assert.equals(t.year, 109) -- 0: 1900, 109: 2009
+   --assert.equals(t.wday, 5) -- 0: Sunday, 5: Friday
+   --assert.equals(t.yday, 43) -- 0: Jan 1, 43: Feb 13
+   assert.equals(t:timelocal(), 1234567890)
+
+   -- with no argument it uses current time
+   local diff = time.localtime():timelocal() - time.localtime(time.time()):timelocal()
+   assert(math.abs(diff) <= 1)
+end)
