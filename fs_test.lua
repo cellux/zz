@@ -102,6 +102,33 @@ testing("seek", function()
    f:close()
 end)
 
+testing:with_tmpdir("truncate, seek_end", function(ctx)
+   local path = fs.join(ctx.tmpdir, "temp")
+   fs.writefile(path, fs.readfile("testdata/arborescence.jpg"))
+   local f = fs.open(path, ffi.C.O_RDWR)
+   assert.equals(f:size(), 81942)
+   assert.equals(f:pos(), 0)
+   f:seek_end()
+   assert.equals(f:pos(), 81942)
+   f:seek(-1942)
+   assert.equals(f:pos(), 80000)
+   f:truncate()
+   f:seek(1000)
+   f:seek_end()
+   assert.equals(f:pos(), 80000)
+   stream(f):write("moooo")
+   assert.equals(f:size(), 80005)
+   f:truncate(40000)
+   f:seek_end()
+   -- if we didn't seek to the end, the file position would remain at
+   -- 80005 and the file size would be 80010 after the write
+   --
+   -- but we'd better not rely on this
+   stream(f):write("moooo")
+   assert.equals(f:size(), 40005)
+   f:close()
+end)
+
 testing("mkstemp", function()
    local f, path = fs.mkstemp()
    assert(type(path)=="string")

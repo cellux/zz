@@ -17,6 +17,7 @@ int     open  (const char *file, int oflag, mode_t mode);
 ssize_t read  (int fd, void *buf, size_t nbytes);
 ssize_t write (int fd, const void *buf, size_t n);
 off_t   lseek (int fd, off_t offset, int whence);
+int     ftruncate (int fd, off_t length);
 int     close (int fd);
 
 struct zz_fs_File_ct {
@@ -144,6 +145,7 @@ enum {
   ZZ_ASYNC_FS_READ,
   ZZ_ASYNC_FS_WRITE,
   ZZ_ASYNC_FS_LSEEK,
+  ZZ_ASYNC_FS_TRUNCATE,
   ZZ_ASYNC_FS_CLOSE,
   ZZ_ASYNC_FS_FUTIMENS,
   ZZ_ASYNC_FS_ACCESS,
@@ -188,6 +190,13 @@ union zz_async_fs_req {
     off_t rv;
     int _errno;
   } lseek;
+
+  struct {
+    int fd;
+    off_t length;
+    int rv;
+    int _errno;
+  } truncate;
 
   struct {
     int fd;
@@ -353,6 +362,27 @@ function File_mt:seek(offset, relative)
    else
       return lseek(self.fd, offset, ffi.C.SEEK_END)
    end
+end
+
+function File_mt:seek_end()
+   return lseek(self.fd, 0, ffi.C.SEEK_END)
+end
+
+function File_mt:truncate(new_size)
+   local rv, _errno
+   new_size = new_size or self:pos()
+   if sched.ticking() then
+      rv = mm.with_block("union zz_async_fs_req", nil, function(req, block_size)
+         req.truncate.fd = self.fd
+         req.truncate.length = new_size
+         async.request(ASYNC_FS, ffi.C.ZZ_ASYNC_FS_TRUNCATE, req)
+         _errno = req.truncate._errno
+         return req.truncate.rv
+      end)
+   else
+      rv = ffi.C.ftruncate(self.fd, new_size)
+   end
+   return util.check_errno("ftruncate", rv, _errno)
 end
 
 function File_mt:close()

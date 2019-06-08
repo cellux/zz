@@ -13,6 +13,7 @@ enum {
   ZZ_ASYNC_FS_READ,
   ZZ_ASYNC_FS_WRITE,
   ZZ_ASYNC_FS_LSEEK,
+  ZZ_ASYNC_FS_TRUNCATE,
   ZZ_ASYNC_FS_CLOSE,
   ZZ_ASYNC_FS_FUTIMENS,
   ZZ_ASYNC_FS_ACCESS,
@@ -55,6 +56,13 @@ union zz_async_fs_req {
     off_t rv;
     int _errno;
   } lseek;
+
+  struct {
+    int fd;
+    off_t length;
+    int rv;
+    int _errno;
+  } truncate;
 
   struct {
     int fd;
@@ -160,6 +168,11 @@ void zz_async_fs_write(union zz_async_fs_req *req) {
 void zz_async_fs_lseek(union zz_async_fs_req *req) {
   req->lseek.rv = lseek(req->lseek.fd, req->lseek.offset, req->lseek.whence);
   req->lseek._errno = errno;
+}
+
+void zz_async_fs_truncate(union zz_async_fs_req *req) {
+  req->truncate.rv = ftruncate(req->truncate.fd, req->truncate.length);
+  req->truncate._errno = errno;
 }
 
 void zz_async_fs_close(union zz_async_fs_req *req) {
@@ -303,6 +316,7 @@ void *zz_async_fs_handlers[] = {
   zz_async_fs_read,
   zz_async_fs_write,
   zz_async_fs_lseek,
+  zz_async_fs_truncate,
   zz_async_fs_close,
   zz_async_fs_futimens,
   zz_async_fs_access,
