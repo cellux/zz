@@ -71,6 +71,15 @@ testing("gmtime", function()
    -- with no argument it uses current time
    local diff = time.gmtime():timegm() - time.gmtime(time.time()):timegm()
    assert(math.abs(diff) <= 1)
+
+   -- wday and yday are not used by timegm()
+   t.wday = 3
+   t.yday = 50
+   assert.equals(t:timegm(), 1234567890)
+
+   -- but other fields are
+   t.mday = 20
+   assert(t:timegm() ~= 1234567890)
 end)
 
 testing("localtime", function()
