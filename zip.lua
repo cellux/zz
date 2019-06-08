@@ -1,364 +1,707 @@
 local ffi = require('ffi')
-local time = require('time') -- for time_t
+local bit = require('bit')
+local time = require('time')
 local mm = require('mm')
 local util = require('util')
+local fs = require('fs')
+local stream = require('stream')
+local buffer = require('buffer')
 
 ffi.cdef [[
 
-/*** zipconf.h ***/
+/*** zlib ***/
 
-typedef int8_t zip_int8_t;
-typedef uint8_t zip_uint8_t;
-typedef int16_t zip_int16_t;
-typedef uint16_t zip_uint16_t;
-typedef int32_t zip_int32_t;
-typedef uint32_t zip_uint32_t;
-typedef int64_t zip_int64_t;
-typedef uint64_t zip_uint64_t;
+typedef uint8_t Bytef;
+typedef unsigned int uInt;
+typedef __UWORD_TYPE uLong;
+typedef void *voidpf;
 
-/* zip.h */
+typedef voidpf (*alloc_func) (voidpf opaque, uInt items, uInt size);
+typedef void   (*free_func)  (voidpf opaque, voidpf address);
 
-/* flags for zip_open */
+typedef struct z_stream_s {
+  Bytef    *next_in;  /* next input byte */
+  uInt     avail_in;  /* number of bytes available at next_in */
+  uLong    total_in;  /* total number of input bytes read so far */
 
-enum {
-  ZIP_CREATE    = 1,
-  ZIP_EXCL      = 2,
-  ZIP_CHECKCONS = 4,
-  ZIP_TRUNCATE  = 8,
-  ZIP_RDONLY    = 16
-};
+  Bytef    *next_out; /* next output byte will go here */
+  uInt     avail_out; /* remaining free space at next_out */
+  uLong    total_out; /* total number of bytes output so far */
 
-/* flags for zip_name_locate, zip_fopen, zip_stat, ... */
+  char     *msg;      /* last error message, NULL if no error */
+  struct internal_state *state; /* not visible by applications */
 
-enum {
-  ZIP_FL_NOCASE     = 1,    /* ignore case on name lookup */
-  ZIP_FL_NODIR      = 2,    /* ignore directory component */
-  ZIP_FL_COMPRESSED = 4,    /* read compressed data */
-  ZIP_FL_UNCHANGED  = 8,    /* use original data, ignoring changes */
-  ZIP_FL_RECOMPRESS = 16,   /* force recompression of data */
-  ZIP_FL_ENCRYPTED  = 32,   /* read encrypted data */
-  ZIP_FL_ENC_GUESS  = 0,    /* guess string encoding (is default) */
-  ZIP_FL_ENC_RAW    = 64,   /* get unmodified string */
-  ZIP_FL_ENC_STRICT = 128,  /* follow specification strictly */
-  ZIP_FL_LOCAL      = 256,  /* in local header */
-  ZIP_FL_CENTRAL    = 512,  /* in central directory */
-  ZIP_FL_ENC_UTF_8  = 2048, /* string is UTF-8 encoded */
-  ZIP_FL_ENC_CP437  = 4096, /* string is CP437 encoded */
-  ZIP_FL_OVERWRITE  = 8192  /* zip_file_add: if file with name exists,
-                               overwrite (replace) it */
-};
+  alloc_func zalloc;  /* used to allocate the internal state */
+  free_func  zfree;   /* used to free the internal state */
+  voidpf     opaque;  /* private data object passed to zalloc and zfree */
 
-/* compression methods */
+  int     data_type;  /* best guess about the data type: binary or text
+                         for deflate, or the decoding state for inflate */
+  uLong   adler;      /* Adler-32 or CRC-32 value of the uncompressed data */
+  uLong   reserved;   /* reserved for future use */
+} z_stream;
+
+typedef z_stream *z_streamp;
+
+/* constants */
 
 enum {
-  ZIP_CM_DEFAULT        = -1, /* better of deflate or store */
-  ZIP_CM_STORE          = 0,  /* stored (uncompressed) */
-  ZIP_CM_SHRINK         = 1,  /* shrunk */
-  ZIP_CM_REDUCE_1       = 2,  /* reduced with factor 1 */
-  ZIP_CM_REDUCE_2       = 3,  /* reduced with factor 2 */
-  ZIP_CM_REDUCE_3       = 4,  /* reduced with factor 3 */
-  ZIP_CM_REDUCE_4       = 5,  /* reduced with factor 4 */
-  ZIP_CM_IMPLODE        = 6,  /* imploded */
-  ZIP_CM_DEFLATE        = 8,  /* deflated */
-  ZIP_CM_DEFLATE64      = 9,  /* deflate64 */
-  ZIP_CM_PKWARE_IMPLODE = 10, /* PKWARE imploding */
-  ZIP_CM_BZIP2          = 12, /* compressed using BZIP2 algorithm */
-  ZIP_CM_LZMA           = 14, /* LZMA (EFS) */
-  ZIP_CM_TERSE          = 18, /* compressed using IBM TERSE (new) */
-  ZIP_CM_LZ77           = 19, /* IBM LZ77 z Architecture (PFS) */
-  ZIP_CM_XZ             = 95, /* XZ compressed data */
-  ZIP_CM_JPEG           = 96, /* Compressed Jpeg data */
-  ZIP_CM_WAVPACK        = 97, /* WavPack compressed data */
-  ZIP_CM_PPMD           = 98  /* PPMd version I, Rev 1 */
+  Z_NO_FLUSH      = 0,
+  Z_PARTIAL_FLUSH = 1,
+  Z_SYNC_FLUSH    = 2,
+  Z_FULL_FLUSH    = 3,
+  Z_FINISH        = 4,
+  Z_BLOCK         = 5,
+  Z_TREES         = 6
 };
-
-/* error information */
-
-struct zip_error {
-  int zip_err; /* libzip error code (ZIP_ER_*) */
-  int sys_err; /* copy of errno (E*) or zlib error code */
-  char *str;   /* string representation or NULL */
-};
-
-/* zip_stat */
 
 enum {
-  ZIP_STAT_NAME              = 0x0001,
-  ZIP_STAT_INDEX             = 0x0002,
-  ZIP_STAT_SIZE              = 0x0004,
-  ZIP_STAT_COMP_SIZE         = 0x0008,
-  ZIP_STAT_MTIME             = 0x0010,
-  ZIP_STAT_CRC               = 0x0020,
-  ZIP_STAT_COMP_METHOD       = 0x0040,
-  ZIP_STAT_ENCRYPTION_METHOD = 0x0080,
-  ZIP_STAT_FLAGS             = 0x0100
+  Z_OK            =  0,
+  Z_STREAM_END    =  1,
+  Z_NEED_DICT     =  2,
+  Z_ERRNO         = (-1),
+  Z_STREAM_ERROR  = (-2),
+  Z_DATA_ERROR    = (-3),
+  Z_MEM_ERROR     = (-4),
+  Z_BUF_ERROR     = (-5),
+  Z_VERSION_ERROR = (-6)
 };
 
-struct zip_stat {
-  zip_uint64_t valid;             /* which fields have valid values */
-  const char *name;               /* name of the file */
-  zip_uint64_t index;             /* index within archive */
-  zip_uint64_t size;              /* size of file (uncompressed) */
-  zip_uint64_t comp_size;         /* size of file (compressed) */
-  time_t mtime;                   /* modification time */
-  zip_uint32_t crc;               /* crc of file data */
-  zip_uint16_t comp_method;       /* compression method used */
-  zip_uint16_t encryption_method; /* encryption method used */
-  zip_uint32_t flags;             /* reserved for future use */
+enum {
+  Z_NO_COMPRESSION      =   0,
+  Z_BEST_SPEED          =   1,
+  Z_BEST_COMPRESSION    =   9,
+  Z_DEFAULT_COMPRESSION = (-1)
 };
 
-typedef struct zip zip_t;
-typedef struct zip_error zip_error_t;
-typedef struct zip_file zip_file_t;
-typedef struct zip_source zip_source_t;
-typedef struct zip_stat zip_stat_t;
+enum {
+  Z_FILTERED         = 1,
+  Z_HUFFMAN_ONLY     = 2,
+  Z_RLE              = 3,
+  Z_FIXED            = 4,
+  Z_DEFAULT_STRATEGY = 0
+};
 
-typedef zip_uint32_t zip_flags_t;
+enum {
+  Z_BINARY   = 0,
+  Z_TEXT     = 1,
+  Z_ASCII    = Z_TEXT,
+  Z_UNKNOWN  = 2
+};
 
-const char *zip_libzip_version(void);
-const char *zip_strerror(zip_t *);
+enum {
+  Z_DEFLATED = 8
+};
 
-zip_source_t *zip_source_file(zip_t *, const char *, zip_uint64_t, zip_int64_t);
-zip_source_t *zip_source_buffer(zip_t *, const void *, zip_uint64_t, int);
-void zip_source_free(zip_source_t *source);
-int zip_source_close(zip_source_t *);
+const char * zlibVersion (void);
 
-zip_t *zip_open(const char *, int, int *);
-zip_t *zip_fdopen(int, int, int *);
-zip_int64_t zip_dir_add(zip_t *, const char *, zip_flags_t);
-zip_int64_t zip_file_add(zip_t *, const char *, zip_source_t *, zip_flags_t);
-int zip_file_replace(zip_t *, zip_uint64_t, zip_source_t *, zip_flags_t);
-int zip_delete(zip_t *, zip_uint64_t);
-zip_int64_t zip_name_locate(zip_t *, const char *, zip_flags_t);
-const char *zip_get_name(zip_t *, zip_uint64_t, zip_flags_t);
-zip_int64_t zip_get_num_entries(zip_t *, zip_flags_t);
-int zip_stat(zip_t *, const char *, zip_flags_t, zip_stat_t *);
-int zip_stat_index(zip_t *, zip_uint64_t, zip_flags_t, zip_stat_t *);
-int zip_close(zip_t *);
+int deflateInit2_ (
+  z_streamp strm,
+  int level,
+  int method,
+  int windowBits,
+  int memLevel,
+  int strategy,
+  const char *version,
+  int stream_size);
+int deflate (z_streamp strm, int flush);
+int deflateEnd (z_streamp strm);
+int deflatePending (
+  z_streamp strm,
+  unsigned *pending,
+  int *bits);
 
-zip_file_t *zip_fopen(zip_t *, const char *, zip_flags_t);
-zip_file_t *zip_fopen_index(zip_t *, zip_uint64_t, zip_flags_t);
-zip_int64_t zip_fread(zip_file_t *, void *, zip_uint64_t);
-int zip_fclose(zip_file_t *);
+int inflateInit2_ (
+  z_streamp strm,
+  int windowBits,
+  const char *version,
+  int stream_size);
+int inflate (z_streamp strm, int flush);
+int inflateEnd (z_streamp strm);
 
-typedef void (*zip_progress_callback)(zip_t *, double, void *);
-int zip_register_progress_callback_with_state(zip_t *, double, zip_progress_callback, void (*ud_free)(void *), void *ud);
+uLong crc32 (uLong crc, const Bytef *buf, uInt len);
 
-void zip_error_init_with_code(zip_error_t *, int);
-const char *zip_error_strerror(zip_error_t *);
-void zip_error_fini(zip_error_t *);
+/*** zip ***/
+
+struct zz_zip_central_file_header {
+  uint32_t signature; /* 0x02014b50 */
+  uint16_t made_by_version;
+  uint16_t extract_version;
+  uint16_t bit_flags;
+  uint16_t compression_method;
+  uint16_t mtime;
+  uint16_t mdate;
+  uint32_t crc32;
+  uint32_t compressed_size;
+  uint32_t uncompressed_size;
+  uint16_t file_name_length;
+  uint16_t extra_field_length;
+  uint16_t file_comment_length;
+  uint16_t disk_number_start;
+  uint16_t internal_attributes;
+  uint32_t external_attributes;
+  uint32_t local_header_offset;
+
+  /* file name (variable length) */
+  /* extra field (variable length) */
+  /* file comment (variable length) */
+};
+
+struct zz_zip_local_file_header {
+  uint32_t signature; /* 0x04034b50 */
+  uint16_t extract_version;
+  uint16_t bit_flags;
+  uint16_t compression_method;
+  uint16_t mtime;
+  uint16_t mdate;
+  uint32_t crc32;
+  uint32_t compressed_size;
+  uint32_t uncompressed_size;
+  uint16_t file_name_length;
+  uint16_t extra_field_length;
+
+  /* file name (variable length) */
+  /* extra field (variable length) */
+};
+
+struct zz_zip_eocd { /* end-of-central-directory */
+  uint32_t signature; /* 0x06054b50 */
+  uint16_t disk_number;
+  uint16_t disk_number_of_eocd;
+  uint16_t num_entries_disk; /* number of entries on this disk */
+  uint16_t num_entries_total;
+  uint32_t central_directory_size; /* in bytes */
+  uint32_t central_directory_offset; /* from beginning of first disk */
+  uint16_t zip_comment_length;
+
+  /* zip comment (variable length) */
+};
 
 ]]
 
+local z = ffi.load("z")
+
 local M = {}
 
-function M.version()
-   return ffi.string(ffi.C.zip_libzip_version())
+local BUF_SIZE = 16384
+
+local CENTRAL_FILE_HEADER_SIGNATURE = 0x02014b50
+local LOCAL_FILE_HEADER_SIGNATURE   = 0x04034b50
+local EOCD_SIGNATURE                = 0x06054b50
+
+local CENTRAL_FILE_HEADER_SIZE = 46
+local LOCAL_FILE_HEADER_SIZE   = 30
+local EOCD_SIZE                = 22
+
+local function zlibVersion()
+   return ffi.string(z.zlibVersion())
 end
 
-local stat_mask = {
-   name = ffi.C.ZIP_STAT_NAME,
-   index = ffi.C.ZIP_STAT_INDEX,
-   size = ffi.C.ZIP_STAT_SIZE,
-   comp_size = ffi.C.ZIP_STAT_COMP_SIZE,
-   mtime = ffi.C.ZIP_STAT_MTIME,
-   crc = ffi.C.ZIP_STAT_CRC,
-   comp_method = ffi.C.ZIP_STAT_COMP_METHOD,
-   encryption_method = ffi.C.ZIP_STAT_ENCRYPTION_METHOD,
-   flags = ffi.C.ZIP_STAT_FLAGS,
-}
+function M.deflate(input)
+   input = stream(input)
 
-local function ZipStat(st)
-   local function get_field(self, k)
-      local mask = stat_mask[k]
-      if mask and bit.band(st.valid, mask) ~= 0 then
-         if k == "name" then
-            return ffi.string(st[k])
-         else
-            return tonumber(st[k])
+   local z_stream = ffi.new("z_stream")
+   z_stream.zalloc = nil
+   z_stream.zfree = nil
+   z_stream.opaque = nil
+
+   local level = z.Z_DEFAULT_COMPRESSION
+   local method = z.Z_DEFLATED
+   local windowBits = -15 -- raw deflate with 32k window
+   local memLevel = 8
+   local strategy = z.Z_DEFAULT_STRATEGY
+   local version = z.zlibVersion()
+   local stream_size = ffi.sizeof("z_stream")
+
+   util.check_ok("deflateInit2_", z.Z_OK, z.deflateInit2_(
+     z_stream, level, method, windowBits, memLevel, strategy,
+     version, stream_size))
+
+   local buf = ffi.new("uint8_t[?]", BUF_SIZE)
+   z_stream.next_in = buf
+   z_stream.avail_in = 0
+
+   local flush = z.Z_NO_FLUSH
+   local stream_end = false
+
+   return stream {
+      close = function(self)
+         if z_stream ~= nil then
+            z.deflateEnd(z_stream)
+            z_stream = nil
+            buf = nil
+            input:close()
          end
+      end,
+      eof = function(self)
+         return stream_end
+      end,
+      read1 = function(self, ptr, size)
+         if stream_end then
+            return 0
+         end
+         if z_stream.avail_in == 0 then
+            if input:eof() then
+               flush = z.Z_FINISH
+            else
+               z_stream.next_in = buf
+               z_stream.avail_in = input:read1(buf, BUF_SIZE)
+            end
+         end
+         z_stream.next_out = ptr
+         z_stream.avail_out = size
+         local rv = z.deflate(z_stream, flush)
+         if rv == z.Z_STREAM_END then
+            stream_end = true
+         elseif rv ~= z.Z_OK and rv ~= z.Z_BUF_ERROR then
+            ef("deflate failed (%d)", rv)
+         end
+         local nbytes = z_stream.next_out - ptr
+         return nbytes
+      end,
+      write1 = function(self)
+         ef("unimplemented")
+      end
+   }
+end
+
+function M.inflate(input)
+   input = stream(input)
+
+   local z_stream = ffi.new("z_stream")
+   z_stream.zalloc = nil
+   z_stream.zfree = nil
+   z_stream.opaque = nil
+
+   local windowBits = -15 -- raw inflate with 32k window
+   local version = z.zlibVersion()
+   local stream_size = ffi.sizeof("z_stream")
+
+   util.check_ok("inflateInit2_", z.Z_OK, z.inflateInit2_(
+      z_stream, windowBits, version, stream_size))
+
+   local buf = ffi.new("uint8_t[?]", BUF_SIZE)
+   z_stream.next_in = buf
+   z_stream.avail_in = 0
+
+   local flush = z.Z_NO_FLUSH
+   local stream_end = false
+
+   return stream {
+      close = function(self)
+         if z_stream ~= nil then
+            z.inflateEnd(z_stream)
+            z_stream = nil
+            buf = nil
+            input:close()
+         end
+      end,
+      eof = function(self)
+         return stream_end
+      end,
+      read1 = function(self, ptr, size)
+         if stream_end then
+            return 0
+         end
+         if z_stream.avail_in == 0 then
+            if input:eof() then
+               flush = z.Z_FINISH
+            else
+               z_stream.next_in = buf
+               z_stream.avail_in = input:read1(buf, BUF_SIZE)
+            end
+         end
+         z_stream.next_out = ptr
+         z_stream.avail_out = size
+         local rv = z.inflate(z_stream, flush)
+         if rv == z.Z_STREAM_END then
+            stream_end = true
+         elseif rv ~= z.Z_OK and rv ~= z.Z_BUF_ERROR then
+            ef("inflate failed (%d)", rv)
+         end
+         local nbytes = z_stream.next_out - ptr
+         return nbytes
+      end,
+      write1 = function(self)
+         ef("unimplemented")
+      end
+   }
+end
+
+local EOCD = util.Class()
+
+function EOCD:new(opts)
+   local self = {
+      disk_number = opts.disk_number or 0,
+      disk_number_of_eocd = opts.disk_number_of_eocd or 0,
+      num_entries_disk = opts.num_entries_disk or opts.num_entries_total or 0,
+      num_entries_total = opts.num_entries_total or 0,
+      central_directory_size = opts.central_directory_size or 0,
+      central_directory_offset = opts.central_directory_offset or 0,
+      zip_comment_length = 0
+   }
+   return self
+end
+
+function EOCD:write(f)
+   local s = stream(f)
+   s:write_le(4, EOCD_SIGNATURE)
+   s:write_le(2, self.disk_number)
+   s:write_le(2, self.disk_number_of_eocd)
+   s:write_le(2, self.num_entries_disk)
+   s:write_le(2, self.num_entries_total)
+   s:write_le(4, self.central_directory_size)
+   s:write_le(4, self.central_directory_offset)
+   s:write_le(2, self.zip_comment_length) -- should be zero
+end
+
+local function read_eocd(f)
+   if f:size() < EOCD_SIZE then
+      return nil
+   end
+   f:seek(-EOCD_SIZE)
+   local s = stream(f)
+   local signature = s:read_le(4)
+   if signature ~= EOCD_SIGNATURE then
+      return nil
+   end
+   local opts = {}
+   opts.disk_number = s:read_le(2)
+   opts.disk_number_of_eocd = s:read_le(2)
+   opts.num_entries_disk = s:read_le(2)
+   opts.num_entries_total = s:read_le(2)
+   opts.central_directory_size = s:read_le(4)
+   opts.central_directory_offset = s:read_le(4)
+   opts.zip_comment_length = s:read_le(2)
+   assert(opts.zip_comment_length == 0)
+   return EOCD(opts)
+end
+
+local function to_msdos_date(tm)
+   return bit.bor(
+      bit.lshift(tm.year-80, 9),
+      bit.lshift(tm.mon+1, 5),
+      tm.mday)
+end
+
+local function to_msdos_time(tm)
+   return bit.bor(
+      bit.lshift(tm.hour, 11),
+      bit.lshift(tm.min, 5),
+      bit.rshift(tm.sec, 1))
+end
+
+local function from_msdos_date_and_time(dos_date, dos_time)
+   local tm = time.gmtime()
+
+   tm.year = bit.band(bit.rshift(dos_date, 9), 0x7f) + 80
+   tm.mon = bit.band(bit.rshift(dos_date, 5), 0x0f) - 1
+   tm.mday = bit.band(dos_date, 0x1f)
+
+   tm.hour = bit.band(bit.rshift(dos_time, 11), 0x1f)
+   tm.min = bit.band(bit.rshift(dos_time, 5), 0x3f)
+   tm.sec = bit.band(bit.lshift(dos_time, 1), 0x3f)
+
+   return tm
+end
+
+local ZipEntry = util.Class()
+
+function ZipEntry:new(opts)
+   local self = {
+      file_name = opts.file_name,
+      extra_field = opts.extra_field,
+      file_comment = opts.file_comment,
+      made_by_version = opts.made_by_version or 20,
+      extract_version = opts.extract_version or 20,
+      bit_flags = opts.bit_flags or 0,
+      compression_method = opts.compression_method or z.Z_DEFLATED,
+      mtime = opts.mtime or time.time(),
+      crc32 = opts.crc32 or 0,
+      compressed_size = opts.compressed_size or 0,
+      uncompressed_size = opts.uncompressed_size or 0,
+      disk_number_start = 0,
+      internal_attributes = 0,
+      external_attributes = 0,
+      local_header_offset = opts.local_header_offset or 0
+   }
+   return self
+end
+
+function ZipEntry:write_central_header(f)
+   local s = stream(f)
+   s:write_le(4, CENTRAL_FILE_HEADER_SIGNATURE)
+   s:write_le(2, self.made_by_version)
+   s:write_le(2, self.extract_version)
+   s:write_le(2, self.bit_flags)
+   s:write_le(2, self.compression_method)
+   local tm = time.gmtime(self.mtime)
+   s:write_le(2, to_msdos_time(tm))
+   s:write_le(2, to_msdos_date(tm))
+   s:write_le(4, self.crc32)
+   s:write_le(4, self.compressed_size)
+   s:write_le(4, self.uncompressed_size)
+   s:write_le(2, #self.file_name)
+   s:write_le(2, self.extra_field and #self.extra_field or 0)
+   s:write_le(2, self.file_comment and #self.file_comment or 0)
+   s:write_le(2, self.disk_number_start)
+   s:write_le(2, self.internal_attributes)
+   s:write_le(4, self.external_attributes)
+   s:write_le(4, self.local_header_offset)
+   s:write(self.file_name)
+   if self.extra_field then
+      s:write(self.extra_field)
+   end
+   if self.file_comment then
+      s:write(self.file_comment)
+   end
+end
+
+function ZipEntry:write_local_header(f)
+   local s = stream(f)
+   s:write_le(4, LOCAL_FILE_HEADER_SIGNATURE)
+   s:write_le(2, self.extract_version)
+   s:write_le(2, self.bit_flags)
+   s:write_le(2, self.compression_method)
+   local tm = time.gmtime(self.mtime)
+   s:write_le(2, to_msdos_time(tm))
+   s:write_le(2, to_msdos_date(tm))
+   s:write_le(4, self.crc32)
+   s:write_le(4, self.compressed_size)
+   s:write_le(4, self.uncompressed_size)
+   s:write_le(2, #self.file_name)
+   s:write_le(2, self.extra_field and #self.extra_field or 0)
+   s:write(self.file_name)
+   if self.extra_field then
+      s:write(self.extra_field)
+   end
+end
+
+local function read_central_header(f)
+   local s = stream.with_size(CENTRAL_FILE_HEADER_SIZE, f)
+   local signature = s:read_le(4)
+   assert(signature == CENTRAL_FILE_HEADER_SIGNATURE)
+   local opts = {}
+   opts.made_by_version = s:read_le(2)
+   opts.extract_version = s:read_le(2)
+   opts.bit_flags = s:read_le(2)
+   opts.compression_method = s:read_le(2)
+   local mtime = s:read_le(2)
+   local mdate = s:read_le(2)
+   local tm = from_msdos_date_and_time(mdate, mtime)
+   opts.mtime = tm:timegm()
+   opts.crc32 = s:read_le(4)
+   opts.compressed_size = s:read_le(4)
+   opts.uncompressed_size = s:read_le(4)
+   local file_name_length = s:read_le(2)
+   local extra_field_length = s:read_le(2)
+   local file_comment_length = s:read_le(2)
+   opts.disk_number_start = s:read_le(2)
+   opts.internal_attributes = s:read_le(2)
+   opts.external_attributes = s:read_le(4)
+   opts.local_header_offset = s:read_le(4)
+
+   s = stream.with_size(file_name_length + extra_field_length + file_comment_length, f)
+   opts.file_name = tostring(s:read(file_name_length))
+   if extra_field_length > 0 then
+      opts.extra_field = s:read(extra_field_length)
+   end
+   if file_comment_length > 0 then
+      opts.file_comment = tostring(s:read(file_comment_length))
+   end
+
+   return ZipEntry(opts)
+end
+
+local function read_local_header(f)
+   local s = stream.with_size(LOCAL_FILE_HEADER_SIZE, f)
+   local signature = s:read_le(4)
+   assert(signature == LOCAL_FILE_HEADER_SIGNATURE)
+   local opts = {}
+   opts.extract_version = s:read_le(2)
+   opts.bit_flags = s:read_le(2)
+   opts.compression_method = s:read_le(2)
+   local mtime = s:read_le(2)
+   local mdate = s:read_le(2)
+   local tm = from_msdos_date_and_time(mdate, mtime)
+   opts.mtime = tm:timegm()
+   opts.crc32 = s:read_le(4)
+   opts.compressed_size = s:read_le(4)
+   opts.uncompressed_size = s:read_le(4)
+   local file_name_length = s:read_le(2)
+   local extra_field_length = s:read_le(2)
+
+   s = stream.with_size(file_name_length + extra_field_length, f)
+   opts.file_name = tostring(s:read(file_name_length))
+   if extra_field_length > 0 then
+      opts.extra_field = s:read(extra_field_length)
+   end
+
+   return ZipEntry(opts)
+end
+
+local function read_entries(f, eocd)
+   assert(eocd.disk_number == 0)
+   assert(eocd.disk_number_of_eocd == 0)
+   assert(eocd.num_entries_disk == eocd.num_entries_total)
+   f:seek(eocd.central_directory_offset)
+   local entries = {}
+   for i=1,eocd.num_entries_total do
+      local entry = read_central_header(f)
+      table.insert(entries, entry)
+   end
+   return entries
+end
+
+local ZipFile = util.Class()
+
+function ZipFile:new(path)
+   local self = {
+      path = path,
+      entries = {},
+      updated = false,
+   }
+   if fs.exists(path) then
+      self.file = fs.open(path, bit.bor(ffi.C.O_RDWR))
+   else
+      self.file = fs.open(path, bit.bor(ffi.C.O_CREAT, ffi.C.O_RDWR))
+   end
+   self.eocd = read_eocd(self.file)
+   if self.eocd then
+      local entries = read_entries(self.file, self.eocd)
+      for _,entry in ipairs(entries) do
+         entries[entry.file_name] = entry
+      end
+      self.entries = entries
+      -- move file pointer to the start of the central directory
+      --
+      -- before new files are added to the ZIP, the file will be
+      -- truncated at the current position
+      self.file:seek(self.eocd.central_directory_offset)
+   else
+      -- append new files to the end
+      self.file:seek_end()
+   end
+   return self
+end
+
+function ZipFile:add(file_name, streamable, options)
+   options = options or {}
+
+   local crc32 = M.crc32
+   local input = stream(streamable)
+
+   local entry = ZipEntry {
+      file_name = file_name,
+      extra_field = options.extra_field,
+      file_comment = options.file_comment,
+      mtime = options.mtime,
+   }
+
+   input = stream.tap(input, function(ptr, len)
+      entry.uncompressed_size = entry.uncompressed_size + len
+      entry.crc32 = crc32(entry.crc32, ptr, len)
+   end)
+   input = M.deflate(input)
+   input = stream.tap(input, function(ptr, len)
+      entry.compressed_size = entry.compressed_size + len
+   end)
+
+   -- the file pointer is either at the end of file or at the start of
+   -- the central directory (when calling add() for the first time on
+   -- an existing archive)
+   local header_offset = self.file:pos()
+   entry.local_header_offset = header_offset
+   self.file:truncate()
+   local output = stream(self.file)
+   entry:write_local_header(output)
+   stream.copy(input, output)
+   input:close()
+
+   local next_offset = self.file:pos()
+   self.file:seek(header_offset)
+   -- stream writes are unbuffered so we don't have to worry about
+   -- data left in output buffers
+   entry:write_local_header(output)
+   self.file:seek(next_offset)
+
+   local old_entry_index
+   for i,existing_entry in ipairs(self.entries) do
+      if existing_entry.file_name == file_name then
+         old_entry_index = i
+         break
       end
    end
-   return setmetatable({}, { __index = get_field })
-end
-
-ffi.cdef [[ struct zz_zip_ZipFile_ct { zip_file_t *file; }; ]]
-
-local ZipFile_mt = {}
-
-function ZipFile_mt:strerror()
-   return ffi.string(ffi.C.zip_file_strerror(self.file))
-end
-
-function ZipFile_mt:check_error(funcname, rv)
-   if rv == -1 then
-      util.throwat(3, "zipfile-error", sf("%s: %s", funcname, self:strerror()))
+   if old_entry_index then
+      table.remove(self.entries, old_entry_index)
    end
-   return rv
+   table.insert(self.entries, entry)
+   self.entries[file_name] = entry
+
+   self.updated = true
 end
 
-function ZipFile_mt:fread(buf, nbytes)
-   return self:check_error("zip_fread", tonumber(ffi.C.zip_fread(self.file, buf, nbytes)))
+function ZipFile:exists(file_name)
+   return self.entries[file_name] ~= nil
 end
 
-function ZipFile_mt:fclose()
-   if self.file ~= nil then
-      ffi.C.zip_fclose(self.file)
+function ZipFile:get_entry(file_name)
+   local entry = self.entries[file_name]
+   if not entry then
+      ef("No such file: %s", file_name)
+   end
+   return entry
+end
+
+function ZipFile:stream(file_name)
+   local entry = self:get_entry(file_name)
+   self.file:seek(entry.local_header_offset)
+   local header = read_local_header(self.file)
+   return M.inflate(
+      stream.with_size(header.compressed_size,
+         -- prevent inflate from closing the zip file
+         stream.no_close(self.file)))
+end
+
+function ZipFile:readfile(file_name)
+   local s = self:stream(file_name)
+   local data = s:read(0)
+   s:close()
+   return data
+end
+
+function ZipFile:close()
+   if self.updated then
+      -- file pointer is after last appended file
+      local cd_start = self.file:pos()
+      for _,entry in ipairs(self.entries) do
+         entry:write_central_header(self.file)
+      end
+      local cd_end = self.file:pos()
+      local cd_size = cd_end - cd_start
+      local eocd = EOCD {
+         num_entries_total = #self.entries,
+         central_directory_size = cd_size,
+         central_directory_offset = cd_start
+      }
+      eocd:write(self.file)
+   end
+   if self.file then
+      self.file:close()
       self.file = nil
    end
 end
 
-function ZipFile_mt:as_stream()
-   local stream = {}
-   local zf = self
-   local eof = false
-   function stream:close()
-      return zf:fclose()
+function M.open(path)
+   return ZipFile(path)
+end
+
+function M.crc32(crc, ptr, len)
+   if ptr then
+      return z.crc32(crc, ptr, len)
+   else
+      return z.crc32(0, nil, 0)
    end
-   function stream:eof()
-      return eof
-   end
-   function stream:read1(ptr, size)
-      local nbytes = zf:fread(ptr, size)
-      if nbytes == 0 then
-         eof = true
-      end
-      return nbytes
-   end
-   function stream:write1(ptr, size)
-      ef("not implemented")
-   end
-   return stream
 end
 
-ZipFile_mt.close = ZipFile_mt.fclose
-ZipFile_mt.__index = ZipFile_mt
-
-local ZipFile = ffi.metatype("struct zz_zip_ZipFile_ct", ZipFile_mt)
-
-ffi.cdef [[ struct zz_zip_Zip_ct { zip_t *archive; }; ]]
-
-local Zip_mt = {}
-
-function Zip_mt:strerror()
-   return ffi.string(ffi.C.zip_strerror(self.archive))
-end
-
-function Zip_mt:source_file(fname, start, len)
-   return util.check_bad("zip_source_file", nil, ffi.C.zip_source_file(self.archive, fname, start or 0, len or 0))
-end
-
-function Zip_mt:source_buffer(data, len)
-   return util.check_bad("zip_source_buffer", nil, ffi.C.zip_source_buffer(self.archive, data, len or #data, 0))
-end
-
-function Zip_mt:check_error(funcname, rv, source)
-   if rv == -1 then
-      if source then
-         ffi.C.zip_source_free(source)
-      end
-      util.throwat(3, "zip-error", sf("%s: %s", funcname, self:strerror()))
-   end
-   return rv
-end
-
-function Zip_mt:file_add(name, source, flags)
-   return self:check_error("zip_file_add", tonumber(ffi.C.zip_file_add(self.archive, name, source, flags or 0)), source)
-end
-
-function Zip_mt:file_replace(index, source, flags)
-   return self:check_error("zip_file_replace", tonumber(ffi.C.zip_file_replace(self.archive, index, source, flags or 0)), source)
-end
-
-function Zip_mt:delete(index)
-   return self:check_error("zip_delete", ffi.C.zip_delete(self.archive, index))
-end
-
-local function add_default_name_lookup_flags(flags)
-   return bit.bor(flags or 0, ffi.C.ZIP_FL_ENC_RAW)
-end
-
-function Zip_mt:name_locate(fname, flags)
-   flags = add_default_name_lookup_flags(flags)
-   return tonumber(ffi.C.zip_name_locate(self.archive, fname, flags))
-end
-
-function Zip_mt:get_name(index, flags)
-   flags = add_default_name_lookup_flags(flags)
-   local name = ffi.C.zip_get_name(self.archive, index, flags)
-   if name == nil then
-      util.throw("zip-error", sf("zip_get_name: %s", self:strerror()))
-   end
-   return ffi.string(name)
-end
-
-function Zip_mt:get_num_entries(flags)
-   return self:check_error("zip_get_num_entries", tonumber(ffi.C.zip_get_num_entries(self.archive, flags or 0)))
-end
-
-function Zip_mt:stat(fname, flags)
-   flags = add_default_name_lookup_flags(flags)
-   local st = ffi.new("zip_stat_t")
-   self:check_error("zip_stat", ffi.C.zip_stat(self.archive, fname, flags, st))
-   return ZipStat(st)
-end
-
-function Zip_mt:stat_index(index, flags)
-   flags = add_default_name_lookup_flags(flags)
-   local st = ffi.new("zip_stat_t")
-   self:check_error("zip_stat_index", ffi.C.zip_stat_index(self.archive, index, flags, st))
-   return ZipStat(st)
-end
-
-function Zip_mt:fopen(fname, flags)
-   flags = add_default_name_lookup_flags(flags)
-   local file = ffi.C.zip_fopen(self.archive, fname, flags)
-   if file == nil then
-      util.throw("zip-error", sf("zip_fopen: %s", self:strerror()))
-   end
-   return ZipFile(file)
-end
-
-function Zip_mt:fopen_index(index, flags)
-   flags = add_default_name_lookup_flags(flags)
-   local file = ffi.C.zip_fopen_index(self.archive, index, flags)
-   if file == nil then
-      util.throw("zip-error", sf("zip_fopen_index: %s", self:strerror()))
-   end
-   return ZipFile(file)
-end
-
-function Zip_mt:close()
-   if self.archive ~= nil then
-      local rv = ffi.C.zip_close(self.archive)
-      if rv < 0 then
-         ffi.C.free(self.archive)
-      end
-      self.archive = nil
-      self:check_error("zip_close", rv)
-   end
-   return rv
-end
-
-Zip_mt.__index = Zip_mt
-
-local Zip = ffi.metatype("struct zz_zip_Zip_ct", Zip_mt)
-
-local function strerror(code)
-   local e = ffi.new("zip_error_t")
-   ffi.C.zip_error_init_with_code(e, code)
-   local rv = ffi.string(ffi.C.zip_error_strerror(e))
-   ffi.C.zip_error_fini(e)
-   return rv
-end
-
-function M.open(path, flags)
-   local status = ffi.new("int[1]")
-   local archive = ffi.C.zip_open(path, flags or 0, status)
-   if archive == nil then
-      util.throw("zip-error", sf("zip_open: %s", strerror(status[0])))
-   end
-   return Zip(archive)
-end
-
-return setmetatable(M, { __index = ffi.C })
+return M

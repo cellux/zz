@@ -1,5 +1,6 @@
 local fs = require('fs')
 local stream = require('stream')
+local zip = require('zip')
 local util = require('util')
 
 local M = {}
@@ -27,6 +28,9 @@ function Target:resolve(path)
    return path
 end
 
+function Target:close()
+end
+
 local function FSTarget(tpath, mp)
    local self = Target(tpath, mp)
    function self:exists(path)
@@ -42,6 +46,24 @@ local function FSTarget(tpath, mp)
    return self
 end
 
+local function ZipTarget(tpath, mp)
+   local zf = zip.open(tpath)
+   local self = Target(tpath, mp)
+   function self:exists(path)
+      path = self:resolve(path)
+      return zf:exists(path)
+   end
+   function self:stream(path)
+      path = self:resolve(path)
+      assert(path)
+      return zf:stream(path)
+   end
+   function self:close()
+      zf:close()
+   end
+   return self
+end
+
 local Root = util.Class()
 
 function Root:new()
@@ -53,6 +75,8 @@ end
 function Root:mount(tpath, mp)
    if fs.is_dir(tpath) then
       table.insert(self.targets, FSTarget(tpath, mp))
+   elseif fs.is_reg(tpath) then
+      table.insert(self.targets, ZipTarget(tpath, mp))
    else
       ef("unable to mount target: %s", tpath)
    end
@@ -137,6 +161,12 @@ function Root:readfile(path)
    local contents = s:read(0)
    s:close()
    return contents
+end
+
+function Root:close()
+   for _,t in ipairs(self.targets) do
+      t:close()
+   end
 end
 
 M.Root = Root

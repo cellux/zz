@@ -10,6 +10,7 @@ local util = require('util')
 local bcsave = require('jit.bcsave')
 local ffi = require('ffi')
 local stream = require('stream')
+local zip = require('zip')
 
 local quiet = false
 
@@ -211,14 +212,14 @@ function Target:collect(key)
    return rv
 end
 
-function Target:make(force)
+function Target:make()
    local my_mtime = self:mtime()
    local changed = {} -- list of updated dependencies
    local max_mtime = 0
    self.depends = flatten(self.ctx:resolve_targets(self.depends))
    for _,t in ipairs(self.depends) do
       assert(is_target(t))
-      t:make(force)
+      t:make()
       local mtime = t:mtime()
       if mtime > my_mtime then
          table.insert(changed, t)
@@ -227,7 +228,7 @@ function Target:make(force)
          max_mtime = mtime
       end
    end
-   if (my_mtime < max_mtime or force) and self.build then
+   if (my_mtime < max_mtime or self.force) and self.build then
       log("[BUILD] %s", self.basename)
       if self.dirname then
          fs.mkpath(self.dirname)
@@ -237,10 +238,6 @@ function Target:make(force)
          fs.touch(self.path)
       end
    end
-end
-
-function Target:force_make()
-   self:make(true)
 end
 
 local function maybe_a_file_path(x)
@@ -463,6 +460,33 @@ function BuildContext:link(opts)
    if status ~= 0 then
       die("link failed")
    end
+end
+
+function BuildContext:attach_zipped_mounts(opts)
+   local zf = zip.open(target_path(opts.dst))
+   for _,mount in ipairs(opts.mounts) do
+      local function process(path)
+         local abspath = fs.join(mount.path, path)
+         if fs.is_reg(abspath) then
+            zf:add(fs.join(mount.pkg, path), fs.open(abspath))
+            pf("[ZIP] %s", fs.join(mount.pkg, path))
+         end
+      end
+      local function get_children(path)
+         local abspath = fs.join(mount.path, path)
+         local children = {}
+         if fs.is_dir(abspath) then
+            for entry in fs.readdir(abspath) do
+               if fs.is_reg(fs.join(abspath, entry)) then
+                  table.insert(children, fs.join(path, entry))
+               end
+            end
+         end
+         return children
+      end
+      walk('', process, get_children)
+   end
+   zf:close()
 end
 
 function BuildContext.Target(ctx, opts)
@@ -769,7 +793,7 @@ end
 
 function BuildContext:gen_vfs_mounts()
    local mount_statements = {}
-   for mount in ipairs(self:collect_mounts()) do
+   for _,mount in ipairs(self:collect_mounts()) do
       table.insert(mount_statements,
          sf("vfs.mount('%s','%s')\n", mount.path, mount.pkg))
    end
@@ -783,8 +807,17 @@ function BuildContext:gen_vfs_mounts()
    return code
 end
 
-function BuildContext:gen_app_bootstrap(appname)
-   return self:gen_vfs_mounts()..sf("run_module('%s')\n", self:mangle(appname))
+function BuildContext:gen_app_bootstrap(appname, has_attached_zip)
+   local code = ''
+   if has_attached_zip then
+      code = code .. "do\n"
+      code = code .. "local vfs = require('vfs')\n"
+      code = code .. "local process = require('process')\n"
+      code = code .. "vfs.mount(process.get_executable_path())\n"
+      code = code .. "end\n"
+   end
+   code = code .. sf("run_module('%s')\n", self:mangle(appname))
+   return code
 end
 
 function BuildContext:gen_run_bootstrap()
@@ -798,6 +831,8 @@ end
 function BuildContext:prep_app_targets()
    if not self.app_targets then
       self:prep_link_targets()
+      local mounts = self:collect_mounts()
+      local attach_zip = #mounts > 0
       local targets = {}
       for _,appname in ipairs(self.pd.apps) do
          local app_module_targets = {}
@@ -806,7 +841,7 @@ function BuildContext:prep_app_targets()
             -- we shall build it separately
             app_module_targets = self:module_targets(appname)
          end
-         local bootstrap = self:gen_app_bootstrap(appname)
+         local bootstrap = self:gen_app_bootstrap(appname, attach_zip)
          local main_targets = self:main_targets('_main', bootstrap)
          local ctx = self
          local app = self:Target {
@@ -815,7 +850,7 @@ function BuildContext:prep_app_targets()
             depends = {
                self.link_targets,
                app_module_targets,
-               main_targets
+               main_targets,
             },
             build = function(self)
                ctx:link {
@@ -827,6 +862,12 @@ function BuildContext:prep_app_targets()
                   },
                   ldflags = ctx:ldflags()
                }
+               if attach_zip then
+                  ctx:attach_zipped_mounts {
+                     dst = self,
+                     mounts = mounts,
+                  }
+               end
             end
          }
          table.insert(targets, app)

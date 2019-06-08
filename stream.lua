@@ -453,6 +453,31 @@ function M.with_size(remaining, s)
    return Stream(self)
 end
 
+function M.tap(s, callback)
+   s = make_stream(s)
+   local self = {}
+   function self:read1(ptr, size)
+      local bytes_read = s:read1(ptr, size)
+      callback(ptr, bytes_read)
+      return bytes_read
+   end
+   function self:write1(ptr, size)
+      local bytes_written = s:write1(ptr, size)
+      callback(ptr, bytes_written)
+      return bytes_written
+   end
+   return util.chain(self, s)
+end
+
+function M.no_close(s)
+   s = make_stream(s)
+   local self = {}
+   function self:close()
+      -- nop
+   end
+   return util.chain(self, s)
+end
+
 local M_mt = {}
 
 function M_mt:__call(...)

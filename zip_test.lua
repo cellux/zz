@@ -4,111 +4,63 @@ local fs = require('fs')
 local stream = require('stream')
 local assert = require('assert')
 
-testing("version", function()
-   assert.type(zip.version(), 'string')
+testing("deflate/inflate", function()
+   local data = fs.readfile('testdata/sub/HighHopes.txt')
+   -- deflate(x) returns a stream of the compressed data
+   local compressed = zip.deflate(data):slurp()
+   assert(#compressed < #data)
+   -- inflate(x) returns a stream of the decompressed data
+   local decompressed = zip.inflate(compressed):slurp()
+   assert.equals(data, decompressed)
 end)
 
-testing("open", function()
-   fs.with_tmpdir(function(tmpdir)
-      assert.throws('No such file', function()
-         local zip = zip.open(fs.join(tmpdir, 'nonexistent.zip'))
-      end)
+testing:with_tmpdir("open", function(ctx)
+   -- opening a non-existent file creates it
+   local zip_path = fs.join(ctx.tmpdir, "data.zip")
+   local zf = zip.open(zip_path)
+   assert(fs.exists(zip_path))
+   zf:close()
+   fs.unlink(zip_path)
+
+   local zf = zip.open(zip_path)
+   -- zf:add(path, streamable) appends local header and compressed data
+   zf:add("some/path/arborescence.jpg", fs.readfile("testdata/arborescence.jpg"))
+   zf:add("other/path/hello.txt", fs.readfile("testdata/hello.txt"))
+   -- zf:add() accepts any streamable
+   local f = fs.open("testdata/sub/HighHopes.txt")
+   zf:add("missing_reunion.txt", f)
+   -- zf:add() reads the input stream until eof and then closes it
+   assert.equals(f.fd, -1)
+   -- zf:close() writes central directory and EOCD
+   zf:close()
+
+   -- now read it back
+   local zf = zip.open(zip_path)
+   -- zf:stream(path) returns an inflate stream of the zip entry at path
+   local s = zf:stream("some/path/arborescence.jpg")
+   assert.equals(s:read(0), fs.readfile("testdata/arborescence.jpg"))
+   -- the inflate stream must be closed to free its resources
+   s:close()
+   -- zf:readfile() is a shortcut for reading a complete file
+   local hopes = zf:readfile("missing_reunion.txt")
+   assert.equals(hopes, fs.readfile("testdata/sub/HighHopes.txt"))
+   -- zf:exists() checks if a file exists within the archive
+   assert(zf:exists("other/path/hello.txt"))
+   assert(not zf:exists("some/path/hello.txt"))
+   -- reading a non-existent file throws
+   assert.throws("No such file", function()
+      zf:readfile("nonexistent")
    end)
+   zf:close()
 end)
 
-testing("create+close does not create empty archives", function()
-   fs.with_tmpdir(function(tmpdir)
-      local zip = zip.open(fs.join(tmpdir, 'test.zip'), zip.ZIP_CREATE)
-      zip:close()
-      assert(not fs.exists(fs.join(tmpdir, 'test.zip')))
-   end)
-end)
-
-testing("the rest", function()
-   fs.with_tmpdir(function(tmpdir)
-      local zf = zip.open(fs.join(tmpdir, 'test.zip'), zip.ZIP_CREATE)
-
-      -- file_add / source_file
-      zf:file_add("some/path/data.txt", zf:source_file("testdata/www.google.com.txt"))
-      zf:file_add("some/path/arbor.jpg", zf:source_file("testdata/arborescence.jpg"))
-
-      -- file_add / source_buffer
-      zf:file_add("heiligenkreuz", zf:source_buffer("Wir sind beim Heiligenkreuz", 8)) -- data, len
-
-      zf:close()
-
-      assert(fs.exists(fs.join(tmpdir, 'test.zip')))
-
-      local zf = zip.open(fs.join(tmpdir, 'test.zip'))
-
-      -- get_num_entries
-      assert.equals(zf:get_num_entries(), 3)
-
-      -- name_locate
-      assert.equals(zf:name_locate("arbor.jpg"), -1)
-      assert.equals(zf:name_locate("arbor.jpg", zip.ZIP_FL_NODIR), 1)
-      assert.equals(zf:name_locate("some/path/arbor.jpg"), 1)
-      assert.equals(zf:name_locate("some/path/data.txt"), 0)
-      assert.equals(zf:name_locate("heiligenkreuz"), 2)
-
-      -- get_name
-      assert.equals(zf:get_name(0), "some/path/data.txt")
-      assert.equals(zf:get_name(1), "some/path/arbor.jpg")
-      assert.equals(zf:get_name(2), "heiligenkreuz")
-      assert.throws('Invalid argument', function()
-         zf:get_name(10)
-      end)
-
-      -- stat
-      assert.throws('No such file', function()
-         local st = zf:stat("nonexistent")
-      end)
-      local st = zf:stat("some/path/data.txt")
-      assert.equals(st.name, "some/path/data.txt")
-      assert.equals(st.index, 0)
-      assert.equals(st.size, 501)
-      local st = zf:stat("some/path/arbor.jpg")
-      assert.equals(st.name, "some/path/arbor.jpg")
-      assert.equals(st.index, 1)
-      assert.equals(st.size, 81942)
-      local st = zf:stat("heiligenkreuz")
-      assert.equals(st.name, "heiligenkreuz")
-      assert.equals(st.index, 2)
-      assert.equals(st.size, 8)
-
-      -- stat_index
-      assert.throws('Invalid argument', function()
-         local st = zf:stat_index(10)
-      end)
-      local st = zf:stat_index(0)
-      assert.equals(st.name, "some/path/data.txt")
-      assert.equals(st.index, 0)
-      assert.equals(st.size, 501)
-      local st = zf:stat_index(1)
-      assert.equals(st.name, "some/path/arbor.jpg")
-      assert.equals(st.index, 1)
-      assert.equals(st.size, 81942)
-      local st = zf:stat_index(2)
-      assert.equals(st.name, "heiligenkreuz")
-      assert.equals(st.index, 2)
-      assert.equals(st.size, 8)
-
-      -- fopen, fread (via stream), close
-      local f = zf:fopen("some/path/arbor.jpg")
-      assert.equals(stream(f):read(0), fs.readfile("testdata/arborescence.jpg"))
-      f:close()
-
-      local f = zf:fopen("some/path/data.txt")
-      assert.equals(stream(f):read(0), fs.readfile("testdata/www.google.com.txt"))
-      f:close()
-
-      local f = zf:fopen("heiligenkreuz")
-      assert.equals(stream(f):read(0), "Wir sind")
-      f:close()
-
-      -- ZipFile:close() is an alias for ZipFile:fclose()
-      assert.equals(f.close, f.fclose)
-
-      zf:close()
-   end)
+testing("crc32", function()
+   local crc = zip.crc32()
+   local s = stream(fs.open("testdata/arborescence.jpg"))
+   while not s:eof() do
+      local block = s:read(4000)
+      crc = zip.crc32(crc, block.ptr, #block)
+   end
+   s:close()
+   assert.equals(crc, 0x2865712d)
 end)

@@ -9,6 +9,7 @@ local digest = require('digest')
 local sched = require('sched')
 local ffi = require('ffi')
 local re = require('re')
+local zip = require('zip')
 
 testing("memory streams (fifos)", function()
    local s = stream()
@@ -321,4 +322,46 @@ testing("stream.with_size", function()
    assert(s:eof())
    s:close()
    assert.equals(buf, buffer.copy(fs.readfile("testdata/arborescence.jpg"), 20))
+end)
+
+testing("stream.tap", function()
+   local crc32 = zip.crc32()
+   local uncompressed_size = 0
+   local compressed_size = 0
+   local input = stream(fs.open("testdata/arborescence.jpg"))
+   input = stream.tap(input, function(ptr, len)
+      uncompressed_size = uncompressed_size + len
+      crc32 = zip.crc32(crc32, ptr, len)
+   end)
+   input = zip.deflate(input)
+   input = stream.tap(input, function(ptr, len)
+      compressed_size = compressed_size + len
+   end)
+   local output_buf = buffer.new()
+   local output = stream(output_buf)
+   stream.copy(input, output)
+   input:close()
+   assert.equals(crc32, 0x2865712d)
+   assert.equals(uncompressed_size, 81942)
+   -- zipping arborescence.jpg with InfoZIP
+   -- results in a compressed size of 81858
+   --
+   -- I don't know why zip.deflate gives a different result
+   assert.equals(compressed_size, 81884)
+   assert.equals(#output_buf, compressed_size)
+end)
+
+testing("stream.no_close", function()
+   local f = fs.open("testdata/arborescence.jpg")
+   local s = stream(f)
+   s:close()
+   -- close is forwarded to the wrapped object by default
+   assert(f.fd == -1)
+
+   local f = fs.open("testdata/arborescence.jpg")
+   local s = stream.no_close(f)
+   s:close()
+   -- no_close() prevents forwarding the close to the wrapped objet
+   assert(f.fd > 0)
+   f:close()
 end)
