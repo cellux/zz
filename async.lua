@@ -37,7 +37,7 @@ void *zz_async_handlers[];
 
 local M = {}
 
-local MAX_ACTIVE_THREADS = 16
+local MAX_ACTIVE_THREADS = 64
 
 -- pool of free (reservable) worker threads
 local thread_pool = {}

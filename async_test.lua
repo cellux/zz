@@ -32,7 +32,8 @@ testing("async", function()
       local payload = table.remove(payloads, math.random(#payloads))
       -- we scale down delay a bit so that the test doesn't take too long
       -- (which also makes the test fragile if the system has high load)
-      table.insert(threads, sched(make_async_echo_requester(delay*0.1, payload, actual_replies)))
+      local scale = 0.05
+      table.insert(threads, sched(make_async_echo_requester(delay*scale, payload, actual_replies)))
       expected_replies[delay] = payload
    end
    sched.join(threads)
