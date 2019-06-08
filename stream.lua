@@ -432,20 +432,23 @@ function M.duplex(input, output)
    return Stream(self)
 end
 
-function M.with_size(remaining, input)
+function M.with_size(remaining, s)
+   s = make_stream(s)
    local self = {}
-   input = make_stream(input)
    function self:eof()
-      return remaining == 0 or input:eof()
+      return remaining == 0 or s:eof()
    end
    function self:read1(ptr, size)
       local adjusted_size = math.min(size, remaining)
-      local bytes_read = input:read1(ptr, adjusted_size)
+      local bytes_read = s:read1(ptr, adjusted_size)
       remaining = remaining - bytes_read
       return bytes_read
    end
+   function self:write1(ptr, size)
+      return s:write1(ptr, size)
+   end
    function self:close()
-      input:close()
+      return s:close()
    end
    return Stream(self)
 end
