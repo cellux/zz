@@ -1,8 +1,8 @@
 # ZZ
 
-ZZ is a general-purpose app engine built on top of LuaJIT and C. It has a small core, a growing set of extension libraries and a command line tool `zz` which can be used to compile ZZ programs into self-contained binary executables.
+ZZ is a general-purpose app engine built on top of LuaJIT and C. It has a small core, a growing set of extension libraries and a command line tool `zz` which can be used to compile ZZ programs and their assets into self-contained binary executables.
 
-The current version only runs on Linux.
+The current version only supports Linux.
 
 > Warning: This project is work in progress. The code is continuously
 > changing/evolving as I figure out what works and what doesn't. Use
@@ -11,17 +11,18 @@ The current version only runs on Linux.
 ## Core features
 
 * coroutine-based, single-threaded scheduler and event loop (sched)
-* async execution of synchronous C calls via thread pool and completion events (async, trigger)
+* async execution of blocking C calls via thread pool and completion events (async, trigger)
 * transparent conversion of OS signals into events (signal)
 * memory buffers (buffer), arena allocator (mm)
 * non-blocking timers (time)
-* non-blocking Unix/TCP/UDP sockets (epoll, net)
+* non-blocking TCP/UDP/Unix sockets (epoll, net)
 * non-blocking file-system operations (fs)
-* unified stream API over files, sockets and memory buffers (stream)
+* unified stream API over files, sockets, memory buffers, etc. (stream)
 * inter-process communication via message passing (nanomsg, msgpack)
 * process management (process)
 * regular expressions (re)
 * reading/writing of ZIP files (zip)
+* assets can be attached to the binary in ZIP format and accessed from the app (vfs)
 * access to command line arguments (argparser)
 * access to environment variables (env)
 * async testing framework (testing, assert)
@@ -31,7 +32,6 @@ The current version only runs on Linux.
 * [LuaJIT](http://luajit.org/)
 * [nanomsg](http://nanomsg.org/)
 * [cmp](https://github.com/camgunz/cmp)
-* [libzip](https://libzip.org)
 * [inspect.lua](https://github.com/kikito/inspect.lua)
 
 These are either automatically downloaded upon compilation or bundled with the source.
@@ -69,7 +69,7 @@ If installation succeeds, you shall find a `zz` executable under `$ZZPATH/bin`. 
 
 There are a couple of example programs in the [zz_examples](https://github.com/cellux/zz_examples) Git repository.
 
-Once you have the `zz` tool, you can fetch and build the examples and their dependencies (recursively) using the following command:
+Once you have the `zz` tool, you can fetch and build the examples and their dependencies (recursively) with the following command:
 
 ```
 zz get github.com/cellux/zz_examples
@@ -108,5 +108,6 @@ zz run 07-geometry-shader-blending.lua
 * [Luvit](https://luvit.io/)
 * [Raspberry Pi](https://www.raspberrypi.org/)
 * [Scheme](http://www.schemers.org/Documents/Standards/R5RS/)
+* [Forth](https://github.com/viswans83/aforth)
 * [Extempore](https://github.com/digego/extempore)
 * [SuperCollider](https://supercollider.github.io/)
