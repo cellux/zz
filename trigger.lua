@@ -66,7 +66,7 @@ function Trigger_mt:delete()
 end
 
 Trigger_mt.__index = Trigger_mt
---Trigger_mt.__gc = Trigger_mt.delete
+Trigger_mt.__gc = Trigger_mt.delete
 
 local Trigger = ffi.metatype("zz_trigger", Trigger_mt)
 

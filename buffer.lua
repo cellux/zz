@@ -127,7 +127,7 @@ function Buffer_mt:free()
    end
 end
 
---Buffer_mt.__gc = Buffer_mt.free
+Buffer_mt.__gc = Buffer_mt.free
 
 local Buffer = ffi.metatype("zz_buffer_t", Buffer_mt)
 

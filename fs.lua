@@ -668,7 +668,7 @@ function Stat_mt:free()
    end
 end
 
---Stat_mt.__gc = Stat_mt.free
+Stat_mt.__gc = Stat_mt.free
 
 local Stat = ffi.metatype("struct zz_fs_Stat_ct", Stat_mt)
 
