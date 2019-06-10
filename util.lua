@@ -478,26 +478,35 @@ end
 
 local Error = M.Class()
 
-function Error:new(level, class, message, extra)
+function Error:new(level, message, context)
    level = (level or 1) + 2 -- Error() + Error:new()
-   local self = extra or {}
-   self.class = class or "error"
+   local self = context or {}
    self.message = tostring(message or "runtime error")
    self.info = debug.getinfo(level)
-   self.__tostring = self.__tostring or function(self) return self.message end
-   self.traceback = self.traceback or debug.traceback(self:__tostring(), level)
+   self.traceback = self.traceback or
+      debug.traceback(self.message, level)
+   self.__tostring = self.__tostring or
+      function(self)
+         return self.traceback
+      end
    return self
 end
 
 M.Error = Error
 
-function M.is_error(x)
-   return type(x)=="table" and x.class and x.message and x.info and x.traceback
+local function is_error(x)
+   return type(x)=="table" and x.message and x.info and x.traceback
 end
 
-function M.throwat(level, ...)
+M.is_error = is_error
+
+function M.throwat(level, x, ...)
    level = (level or 1) + 1
-   error(Error(level, ...), 0)
+   if is_error(x) then
+      error(x, 0)
+   else
+      error(Error(level, x, ...), 0)
+   end
 end
 
 function M.throw(...)
@@ -507,7 +516,7 @@ end
 function M.check_ok(funcname, okvalue, rv)
    if rv ~= okvalue then
       local message = sf("%s() failed: %s", funcname, rv)
-      M.throwat(2, "check_ok", message)
+      M.throwat(2, message)
    else
       return rv
    end
@@ -516,7 +525,7 @@ end
 function M.check_bad(funcname, badvalue, rv)
    if rv == badvalue then
       local message = sf("%s() failed: %s", funcname, rv)
-      M.throwat(2, "check_bad", message)
+      M.throwat(2, message)
    else
       return rv
    end
@@ -527,7 +536,7 @@ function M.check_errno(funcname, rv, _errno)
       _errno = _errno or errno.errno()
       local message = sf("%s() failed: %s", funcname, errno.strerror(_errno))
       local context = { errno = _errno }
-      M.throwat(2, "check_errno", message, context)
+      M.throwat(2, message, context)
    else
       return rv
    end
@@ -539,10 +548,10 @@ function M.pcall(f, ...)
       return f(unpack(args))
    end
    local function error_handler(e)
-      if M.is_error(e) then
+      if is_error(e) then
          return e
       else
-         return M.Error(2, nil, e)
+         return Error(2, e)
       end
    end
    return xpcall(trampoline, error_handler)

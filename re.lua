@@ -105,7 +105,7 @@ local pcre_mt = {
       elseif rv < 0 then
          ef("pcre_exec() failed (%d)", rv)
       elseif rv == 0 then
-         error("pcre_exec() failed: vector overflow")
+         ef("pcre_exec() failed: vector overflow")
       else
          -- rv is the number of slots filled with match info
          return MatchObject(subject, buf, rv, ovector), false

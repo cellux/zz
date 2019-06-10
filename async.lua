@@ -65,7 +65,7 @@ local function create_worker_thread()
                                    ffi.C.zz_async_worker_thread,
                                    ffi.cast("void*", worker_info))
    if rv ~= 0 then
-      error("cannot create async worker thread: pthread_create() failed")
+      ef("cannot create async worker thread: pthread_create() failed")
    end
    local self = {}
    function self:send_request(worker_id, handler_id, request_data)
@@ -80,7 +80,7 @@ local function create_worker_thread()
       local retval = ffi.new("void*[1]")
       local rv = ffi.C.pthread_join(thread_id[0], retval)
       if rv ~=0 then
-         error("cannot join async worker thread: pthread_join() failed")
+         ef("cannot join async worker thread: pthread_join() failed")
       end
       sched.poller_del(response_trigger.fd)
       response_trigger:delete()

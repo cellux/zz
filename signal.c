@@ -46,7 +46,7 @@ void *zz_signal_handler_thread(void *arg) {
       exit(1);
     }
     if (signum == SIGALRM) {
-      /* we use SIGALRM as the exit signal */
+      /* SIGALRM is our exit signal */
       break;
     }
     cmp_buf.len = 0;

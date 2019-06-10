@@ -228,7 +228,7 @@ function sockaddr_mt:__index(k)
             return ffi.string(buf)
          end)
       else
-         error("Unsupported address family")
+         ef("Unsupported address family")
       end
    elseif k == "port" then
       if self.af == ffi.C.AF_INET then
@@ -250,7 +250,7 @@ function sockaddr_mt.__eq(lhs, rhs)
    elseif lhs.af == ffi.C.AF_INET then
       return lhs.address == rhs.address and lhs.port == rhs.port
    else
-      error("Unsupported address family")
+      ef("Unsupported address family")
    end
 end
 
@@ -305,7 +305,7 @@ end
 
 function Socket_mt:getsockname()
    if self.domain == ffi.C.PF_LOCAL then
-      error("getsockname() not supported for local sockets")
+      ef("getsockname() not supported for local sockets")
    end
    local sock_addr = sockaddr(self.domain)
    local sock_addr_size = ffi.new("socklen_t[1]", ffi.sizeof(sock_addr.addr))
@@ -319,7 +319,7 @@ end
 
 function Socket_mt:getpeername()
    if self.domain == ffi.C.PF_LOCAL then
-      error("getpeername() not supported for local sockets")
+      ef("getpeername() not supported for local sockets")
    end
    local peer_addr = sockaddr(self.domain)
    local peer_addr_size = ffi.new("socklen_t[1]", ffi.sizeof(peer_addr.addr))
@@ -510,7 +510,7 @@ local function qpoll(fd, cb, quit_event) -- "quittable" poll
             exit_trigger:read()
             running = false
          else
-            error("invalid fd in epoll event")
+            ef("invalid fd in epoll event")
          end
       end)
    end

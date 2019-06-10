@@ -36,7 +36,7 @@ testing:nosched("ef", function()
    local status, err = pcall(function() ef("Hello, %s", "world") end)
    assert.equals(status, false)
    assert(util.is_error(err))
-   assert.equals(tostring(err), "Hello, world")
+   assert.equals(err.message, "Hello, world")
 
    -- if we throw an error from a coroutine running inside the scheduler,
    -- we'd like to get a valid traceback which correctly shows where the
@@ -49,10 +49,9 @@ testing:nosched("ef", function()
    local status, err = pcall(sched)
    assert.equals(status, false)
    assert(util.is_error(err))
-   assert.equals(tostring(err), "Hello, world")
    local expected_traceback = [[Hello, world
 stack traceback:
 	]]..test_path..[[:46: in function 'throwit'
 	]]..test_path..[[:48: in function <]]..test_path..[[:48>]]
-   assert.equals(err.traceback, expected_traceback)
+   assert.equals(tostring(err), expected_traceback)
 end)

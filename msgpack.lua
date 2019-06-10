@@ -285,7 +285,7 @@ readers[ffi.C.CMP_TYPE_FIXSTR] = function(ctx, obj)
    local size = obj.as.str_size
    return mm.with_block(size, nil, function(ptr, block_size)
       if not ctx:_read(ptr, size) then
-         error("ctx:_read() failed")
+         ef("ctx:_read() failed")
       end
       return ffi.string(ptr, size)
    end)
@@ -303,7 +303,7 @@ readers[ffi.C.CMP_TYPE_BIN8] = function(ctx, obj)
    local size = obj.as.bin_size
    local buf = buffer.new(size, size)
    if not ctx:_read(buf.ptr, size) then
-      error("ctx:_read() failed")
+      ef("ctx:_read() failed")
    end
    return buf
 end
@@ -376,7 +376,7 @@ function Context_mt:read()
       local obj_type = tonumber(obj.type)
       local reader = readers[obj_type]
       if not reader then
-         error("cannot read object: unknown (or unhandled) type")
+         ef("cannot read object: unknown (or unhandled) type")
       end
       return reader(self, obj)
    end)

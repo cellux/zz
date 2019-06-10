@@ -139,7 +139,7 @@ function M.with_block(size, ptr_type, f)
    if ok then
       return rv
    else
-      error(rv, 0)
+      util.throw(rv)
    end
 end
 

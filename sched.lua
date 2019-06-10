@@ -415,7 +415,7 @@ local function Scheduler() -- scheduler constructor
                      local e = rv
                      if not util.is_error(e) then
                         -- convert to an error object with the correct traceback
-                        e = util.Error(0, nil, e, {
+                        e = util.Error(0, e, {
                            traceback = debug.traceback(t, tostring(e), 1)
                         })
                      end

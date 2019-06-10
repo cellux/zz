@@ -103,5 +103,5 @@ end
 
 function _G.ef(fmt, ...)
    local message = string.format(fmt, ...)
-   util.throwat(2, nil, message)
+   util.throwat(2, message)
 end

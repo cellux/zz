@@ -81,7 +81,7 @@ function M.time(clock_id)
    clock_id = clock_id or 0
    local tp = ffi.new("struct timespec")
    if ffi.C.clock_gettime(clock_id, tp) ~= 0 then
-      error("clock_gettime() failed")
+      ef("clock_gettime() failed")
    end
    -- on 64-bit architectures tp.tv_sec and tp.tv_nsec are boxed
    return tonumber(tp.tv_sec) + tonumber(tp.tv_nsec) / 1e9
@@ -96,7 +96,7 @@ function M.nanosleep(seconds)
    requested_time.tv_nsec = ns
    local remaining = ffi.new("struct timespec")
    if ffi.C.nanosleep(requested_time, remaining) ~= 0 then
-      error("nanosleep() failed")
+      ef("nanosleep() failed")
    end
 end
 

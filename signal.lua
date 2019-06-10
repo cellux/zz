@@ -62,7 +62,7 @@ M.SIGPWR    = 30
 M.SIGSYS    = 31
 
 local function sigmask(how, signum)
-   local ss = ffi.new('sigset_t')
+   local ss = ffi.new("sigset_t")
    if signum then
       ffi.C.sigemptyset(ss)
       ffi.C.sigaddset(ss, signum)
@@ -89,14 +89,14 @@ local function SignalModule(sched)
 
    local function start_signal_handler_thread()
       assert(signal_handler_thread_id[0] == 0)
-      -- we handle signals in a dedicated thread which sends an event to
-      -- the Lua scheduler when a signal arrives
+      -- we handle signals in a dedicated thread which converts
+      -- signals into events and sends them to the Lua scheduler
       local rv = ffi.C.pthread_create(signal_handler_thread_id,
                                       nil,
                                       ffi.C.zz_signal_handler_thread,
                                       nil)
       if rv ~= 0 then
-         error("cannot create signal handler thread: pthread_create() failed")
+         ef("cannot create signal handler thread: pthread_create() failed")
       end
       assert(signal_handler_thread_id[0] ~= 0)
    end
@@ -109,7 +109,7 @@ local function SignalModule(sched)
       local retval = ffi.new("void*[1]")
       local rv = ffi.C.pthread_join(signal_handler_thread_id[0], retval)
       if rv ~=0 then
-         error("cannot join signal handler thread: pthread_join() failed")
+         ef("cannot join signal handler thread: pthread_join() failed")
       end
       signal_handler_thread_id[0] = 0
    end
@@ -123,8 +123,12 @@ local function SignalModule(sched)
    end
 
    function self.init()
+      -- we block all signals in the Lua interpreter thread
       M.block()
       sched.on('signal', signal_handler)
+      -- the signal handler thread inherits the signal mask of the Lua
+      -- interpreter thread (i.e. starts with all signals blocked) and
+      -- then uses sigwaitinfo() to check for incoming signals
       start_signal_handler_thread()
    end
 

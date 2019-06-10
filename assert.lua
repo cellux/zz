@@ -8,7 +8,7 @@ local function assert_true(x, err, level)
    err = err or "assertion failed!"
    if x ~= true then
       level = (level or 1) + 1
-      util.throwat(level, "assertion-error", err)
+      util.throwat(level, err)
    end
 end
 
@@ -89,7 +89,7 @@ local function assert_match(pattern, value, err, level)
    local m = re.match(pattern, value)
    if m == nil then
       err = err or sf("pattern '%s' does not match value:\n%s", pattern, value)
-      util.throwat(level, "assertion-error", err)
+      util.throwat(level, err)
    end
 end
 

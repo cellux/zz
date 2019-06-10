@@ -527,7 +527,7 @@ function M.with_tmpdir(cb)
    local ok, err = pcall(cb, tmpdir)
    M.rmpath(tmpdir)
    if not ok then
-      error(err, 2)
+      util.throw(err)
    end
 end
 

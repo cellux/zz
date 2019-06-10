@@ -317,14 +317,13 @@ testing:nosched("errors thrown by scheduled threads contain a stack trace", func
    end)
    local err = assert.throws("not a respectable software company", sched)
    assert(util.is_error(err))
-   assert.equals(err.class, 'error')
    local test_path = debug.getinfo(1,"S").short_src
    assert.match('^'..test_path..[[:\d+: not a respectable software company$]], err.message)
-   assert.match('^'..test_path..[[:\d+: not a respectable software company$]], tostring(err))
    local traceback_pattern = '^'..test_path..[[:\d+: not a respectable software company
 stack traceback:
 	]]..test_path..[[:\d+: in function 'throw'
 	]]..test_path..[[:\d+: in function <]]..test_path..[[:\d+>]]
+   assert.match(traceback_pattern, tostring(err))
    assert.match(traceback_pattern, err.traceback)
 end)
 

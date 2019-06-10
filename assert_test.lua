@@ -42,5 +42,5 @@ expected:
     c = { 5, 9 }
   }, true, false }
 $]]
-   assert(re.match(pattern, tostring(err)), sf("%s does not match %s", err, pattern))
+   assert(re.match(pattern, err.message), sf("%s does not match %s", err, pattern))
 end)
