@@ -85,7 +85,7 @@ zz run 07-geometry-shader-blending.lua
 ## Further information
 
 * read the tests (`*_test.lua`)
-* check INTERNALS.md for some further details
+* check [INTERNALS.md](INTERNALS.md) for some further details
 
 ## Goals
 
