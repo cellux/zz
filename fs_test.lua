@@ -37,6 +37,15 @@ testing:with_tmpdir("open", function(ctx)
    local f = fs.open(fs.join(tmpdir, "data.txt"))
    assert.equals(stream(f):read(0), "hello, world!")
    f:close()
+
+   -- open also accepts fopen-style mode flags
+   local f = fs.open(fs.join(tmpdir, "data.txt"), "w+")
+   assert(f.fd > 0)
+   stream(f):write("hello, world!")
+   f:close()
+   local f = fs.open(fs.join(tmpdir, "data.txt"))
+   assert.equals(stream(f):read(0), "hello, world!")
+   f:close()
 end)
 
 testing("read", function()

@@ -433,8 +433,30 @@ local File = ffi.metatype("struct zz_fs_File_ct", File_mt)
 
 local M = {}
 
+local supported_open_flags = {
+  ["r"] = bit.bor(ffi.C.O_RDONLY),
+  ["w"] = bit.bor(ffi.C.O_WRONLY, ffi.C.O_CREAT, ffi.C.O_TRUNC),
+  ["a"] = bit.bor(ffi.C.O_WRONLY, ffi.C.O_CREAT, ffi.C.O_APPEND),
+  ["r+"] = bit.bor(ffi.C.O_RDWR),
+  ["w+"] = bit.bor(ffi.C.O_RDWR, ffi.C.O_CREAT, ffi.C.O_TRUNC),
+  ["a+"] = bit.bor(ffi.C.O_RDWR, ffi.C.O_CREAT, ffi.C.O_APPEND),
+}
+
+local function parse_open_flags(flags)
+   local bits = nil
+   if type(flags) == "string" then
+      bits = supported_open_flags[flags]
+   elseif type(flags) == "number" then
+      bits = flags
+   end
+   if bits == nil then
+      ef("cannot parse open flags: %s", flags)
+   end
+   return bits
+end
+
 function M.open(path, flags, mode)
-   flags = flags or ffi.C.O_RDONLY
+   flags = parse_open_flags(flags or ffi.C.O_RDONLY)
    mode = mode or util.oct("666")
    local fd, _errno
    if sched.ticking() then
