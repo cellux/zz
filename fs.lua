@@ -1081,9 +1081,22 @@ function M.mkpath(path)
 end
 
 function M.rmpath(path)
-   if M.exists(path) then
-      process.system { "rm", "-rf", path }
+   if not M.exists(path) then
+      return
    end
+   local basename = M.basename(path)
+   if basename == '.' or basename == '..' then
+      return
+   end
+   for name in M.readdir(path) do
+      local entry_path = M.join(path, name)
+      if M.is_dir(entry_path) then
+         M.rmpath(entry_path)
+      else
+         M.unlink(entry_path)
+      end
+   end
+   M.rmdir(path)
 end
 
 function M.glob(pattern, flags)
