@@ -514,15 +514,18 @@ function M.mktemp(...)
    return path
 end
 
-local tmp_index = 0
+local next_tmp_index = util.Counter()
+
+function M.get_tmppath()
+   return sf("%s/%s.%d.%d",
+             env.TMPDIR or '/tmp',
+             M.basename(arg[0]),
+             process.getpid(),
+             next_tmp_index())
+end
 
 function M.with_tmpdir(cb)
-   tmp_index = tmp_index + 1
-   local tmpdir = sf("%s/%s.%d.%d",
-                     env.TMPDIR or '/tmp',
-                     M.basename(arg[0]),
-                     process.getpid(),
-                     tmp_index)
+   local tmpdir = M.get_tmppath()
    M.mkdir(tmpdir)
    local ok, err = pcall(cb, tmpdir)
    M.rmpath(tmpdir)

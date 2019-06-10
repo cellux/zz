@@ -223,29 +223,14 @@ testing('nextid', function(ctx)
 end)
 
 -- tests marked as `with_tmpdir` get a temporary directory which is
--- automatically removed when the test finishes (or fails)
+-- automatically removed when the root suite exits
 --
 -- the path of the temp directory is available as ctx.tmpdir
 
-local s = testing('with_tmpdir')
-s:before(function(ctx)
-   assert.is_nil(ctx.saved_tmpdir_path)
-   ctx.save_tmpdir_path = function(path)
-      ctx.saved_tmpdir_path = path
-   end
-end)
-s:after(function(ctx)
-   assert.type(ctx.saved_tmpdir_path, "string")
-   -- verify that the temp dir was removed
-   assert(not fs.is_dir(ctx.saved_tmpdir_path))
-end)
-s:with_tmpdir('with_tmpdir', function(ctx)
+testing:with_tmpdir('with_tmpdir', function(ctx)
    -- the temp directory path is at ctx.tmpdir
    assert.type(ctx.tmpdir, "string")
    assert(fs.is_dir(ctx.tmpdir))
-   -- save_tmpdir_path() is inherited from parent context
-   -- (a variable set in ctx would not be seen in the parent)
-   ctx.save_tmpdir_path(ctx.tmpdir)
 end)
 
 -- tests may be skipped by specifying the `skip` option

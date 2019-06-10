@@ -15,13 +15,12 @@ end
 
 -- TestContext
 
-local function TestContext()
-   local tc = {}
-   local _nextid = 0
-   function tc:nextid()
-      _nextid = _nextid + 1
-      return _nextid
-   end
+local function TestContext(tmpdir)
+   local tc = {
+      tmpdir = tmpdir,
+      -- nextid() returns a unique number
+      nextid = util.Counter()
+   }
    return tc
 end
 
@@ -29,8 +28,11 @@ end
 
 local Test = util.Class()
 
+local next_test_id = util.Counter()
+
 function Test:new(name, testfn, opts)
    return {
+      id = next_test_id(),
       name = name,
       testfn = testfn,
       opts = opts or {},
@@ -77,11 +79,12 @@ function Test:run(tc, report)
       self.ok, self.err = util.pcall(self.testfn, tc)
       report(self)
    end
+   -- test tmpdir is created only if needed
    if self.opts.with_tmpdir then
-      fs.with_tmpdir(function(tmpdir)
-         tc.tmpdir = tmpdir
-         run()
-      end)
+      assert(type(tc.tmpdir)=="string")
+      fs.mkdir(tc.tmpdir)
+      run()
+      -- all temp dirs will be removed when the root suite finishes
    else
       run()
    end
@@ -220,8 +223,10 @@ function TestSuite:sched(process, test_filter, tc, report)
 end
 
 function TestSuite:run_test(t, tc, report)
-   -- give each test its own context
-   local tc = util.chainlast({}, tc)
+   -- give each test its own context and tmpdir
+   local tc = util.chainlast({
+      tmpdir = fs.join(tc.tmpdir, t.id)
+   }, tc)
    self:run_hooks('before_each', tc)
    t:run(tc, report)
    self:run_hooks('after_each', tc)
@@ -280,9 +285,6 @@ local function ConsoleReporter(suite)
          io.stderr:write("\n")
          local function report_failure(t)
             local err = t.err
-            if util.is_error(err) then
-               err = err.traceback
-            end
             io.stderr:write(sf("\nwhile testing '%s'\nat %s:%d\n\n%s\n",
                                t.name,
                                t.err.info.short_src,
@@ -298,16 +300,29 @@ end
 function TestSuite:run_tests(report)
    local fdcount_at_start = fdcount()
 
-   local tc = TestContext()
-   local report = report or ConsoleReporter(self)
-   self:run_nosched_tests(tc, report)
-   self:run_sched_tests(tc, report)
+   local tmpdir = fs.get_tmppath()
+   assert(not fs.exists(tmpdir))
+
+   local function run()
+      local tc = TestContext(tmpdir)
+      local report = report or ConsoleReporter(self)
+      self:run_nosched_tests(tc, report)
+      self:run_sched_tests(tc, report)
+   end
+
+   fs.mkpath(tmpdir)
+   local ok, err = util.pcall(run)
+   fs.rmpath(tmpdir)
 
    local fdcount_at_end = fdcount()
    if fdcount_at_start ~= fdcount_at_end then
       pf("detected file descriptor leakage: fdcount at start: %d, fdcount at end: %d", fdcount_at_start, fdcount_at_end)
    end
+
+   if not ok then
+      util.throw(err)
+   end
 end
 
-local root_suite = TestSuite()
+local root_suite = TestSuite('root')
 return root_suite
