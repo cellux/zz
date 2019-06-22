@@ -244,6 +244,7 @@ P.exports = {
    "inspect",
    "mm",
    "msgpack",
+   "msgqueue",
    "nanomsg",
    "net",
    "openssl",
@@ -267,6 +268,7 @@ P.exports = {
 P.depends = {
    async = { "trigger" },
    msgpack = { "buffer", "libcmp.a" },
+   msgqueue = { "msgpack", "trigger" },
    signal = { "libnanomsg.a", "buffer", "msgpack" },
 }
 

@@ -18,6 +18,7 @@ PACKAGE_MODULES=(
   inspect
   mm
   msgpack
+  msgqueue
   nanomsg
   net
   openssl
