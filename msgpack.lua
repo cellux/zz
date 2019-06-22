@@ -384,19 +384,25 @@ end
 
 Context_mt.__index = Context_mt
 
-local function Context(buf)
-   buf = buf or buffer.new()
-   local self = {
-      buf = buf,
-      ctx = ffi.new("cmp_ctx_t"),
-      state = ffi.new("zz_cmp_buffer_state", buf, 0),
-   }
+local function Context(self)
+   self.ctx = ffi.new("cmp_ctx_t")
    ffi.C.cmp_init(self.ctx,
                   self.state,
-                  ffi.C.zz_cmp_buffer_reader,
-                  ffi.C.zz_cmp_buffer_skipper,
-                  ffi.C.zz_cmp_buffer_writer)
+                  self.reader,
+                  self.skipper,
+                  self.writer)
    return setmetatable(self, Context_mt)
+end
+
+local function BufferContext(buf)
+   buf = buf or buffer.new()
+   return Context {
+      buf = buf,
+      state = ffi.new("zz_cmp_buffer_state", buf, 0),
+      reader = ffi.C.zz_cmp_buffer_reader,
+      skipper = ffi.C.zz_cmp_buffer_skipper,
+      writer = ffi.C.zz_cmp_buffer_writer
+   }
 end
 
 --
@@ -404,21 +410,23 @@ end
 local M = {}
 
 function M.pack(obj)
-   local ctx = Context()
+   local ctx = BufferContext()
    ctx:write(obj)
    return ctx.buf
 end
 
 function M.pack_array(obj)
-   local ctx = Context()
+   local ctx = BufferContext()
    ctx:write_array(obj)
    return ctx.buf
 end
 
 function M.unpack(data)
    local buf = buffer.wrap(data)
-   local ctx = Context(buf)
+   local ctx = BufferContext(buf)
    return ctx:read()
 end
+
+M.Context = Context
 
 return M
