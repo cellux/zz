@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#include "buffer.h"
-#include "msgpack.h"
 #include "msgqueue.h"
 
 void *zz_signal_handler_thread(void *arg) {

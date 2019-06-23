@@ -12,13 +12,13 @@ The current version only supports Linux.
 
 * coroutine-based, single-threaded scheduler and event loop (sched)
 * async execution of blocking C calls via thread pool and completion events (async, trigger)
+* injection of events from C threads into the scheduler event queue (msgqueue, msgpack)
 * transparent conversion of OS signals into events (signal)
 * memory buffers (buffer), arena allocator (mm)
 * non-blocking timers (time)
 * non-blocking TCP/UDP/Unix sockets (epoll, net)
 * non-blocking file-system operations (fs)
 * unified stream API over files, sockets, memory buffers, etc. (stream)
-* inter-process communication via message passing (nanomsg, msgpack)
 * process management (process)
 * regular expressions (re)
 * reading/writing of ZIP files (zip)
@@ -30,7 +30,6 @@ The current version only supports Linux.
 ## Internal dependencies
 
 * [LuaJIT](http://luajit.org/)
-* [nanomsg](http://nanomsg.org/)
 * [cmp](https://github.com/camgunz/cmp)
 * [inspect.lua](https://github.com/kikito/inspect.lua)
 

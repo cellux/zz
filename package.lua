@@ -4,7 +4,6 @@ P.package = "github.com/cellux/zz"
 
 local LUAJIT_VER  = "2.1.0-beta3"
 local CMP_VER     = "18"
-local NANOMSG_VER = "1.1.5"
 
 P.native = {}
 
@@ -153,82 +152,6 @@ P.native.cmp = function(ctx)
    }
 end
 
-P.native.nanomsg = function(ctx)
-   local NANOMSG_TGZ = sf("nanomsg-%s.tar.gz", NANOMSG_VER)
-   local NANOMSG_URL = sf("https://github.com/nanomsg/nanomsg/archive/%s.tar.gz", NANOMSG_VER)
-   local NANOMSG_DIR = sf("nanomsg-%s", NANOMSG_VER)
-   local NANOMSG_ROOT = sf("%s/%s", ctx.nativedir, NANOMSG_DIR)
-   local NANOMSG_SRC = sf("%s/src", NANOMSG_ROOT)
-   local nanomsg_tgz = ctx:Target {
-      dirname = ctx.nativedir,
-      basename = NANOMSG_TGZ,
-      build = function(self)
-         ctx:download {
-            src = NANOMSG_URL,
-            dst = self,
-         }
-      end
-   }
-   local nanomsg_extracted = ctx:Target {
-      dirname = NANOMSG_ROOT,
-      basename = ".extracted",
-      depends = nanomsg_tgz,
-      build = function(self)
-         ctx:extract {
-            cwd = ctx.nativedir,
-            src = nanomsg_tgz
-         }
-      end
-   }
-   local nanomsg_patched = ctx:Target {
-      dirname = NANOMSG_ROOT,
-      basename = ".patched",
-      depends = nanomsg_extracted,
-      build = function(self)
-         ctx:system {
-            cwd = NANOMSG_ROOT,
-            command = { "ln", "-sfvT", ".", "src/nanomsg" }
-         }
-      end
-   }
-   local libnanomsg_a = ctx:Target {
-      dirname = NANOMSG_ROOT,
-      basename = "libnanomsg.a",
-      depends = nanomsg_patched,
-      build = function(self)
-         ctx:system {
-            cwd = NANOMSG_ROOT,
-            command = {
-               "cmake",
-               "-DNN_STATIC_LIB=ON",
-               "-DNN_ENABLE_DOC=OFF",
-               "-DNN_TOOLS=OFF",
-            }
-         }
-         ctx:system {
-            cwd = NANOMSG_ROOT,
-            command = { "cmake", "--build", ".", "--clean-first" }
-         }
-         ctx:system {
-            cwd = NANOMSG_ROOT,
-            command = { "ctest", "-G", "Debug", "." }
-         }
-      end
-   }
-   return ctx:Target {
-      dirname = ctx.libdir,
-      basename = "libnanomsg.a",
-      depends = libnanomsg_a,
-      cflags = { "-iquote", NANOMSG_SRC },
-      build = function(self)
-         ctx:cp {
-            src = libnanomsg_a,
-            dst = self,
-         }
-      end
-   }
-end
-
 P.exports = {
    "argparser",
    "assert",
@@ -245,7 +168,6 @@ P.exports = {
    "mm",
    "msgpack",
    "msgqueue",
-   "nanomsg",
    "net",
    "openssl",
    "process",
@@ -269,7 +191,7 @@ P.depends = {
    async = { "trigger" },
    msgpack = { "buffer", "libcmp.a" },
    msgqueue = { "msgpack", "trigger" },
-   signal = { "libnanomsg.a", "buffer", "msgpack" },
+   signal = { "msgqueue" },
 }
 
 P.ldflags = {

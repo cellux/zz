@@ -19,7 +19,6 @@ PACKAGE_MODULES=(
   mm
   msgpack
   msgqueue
-  nanomsg
   net
   openssl
   process
@@ -38,7 +37,7 @@ PACKAGE_MODULES=(
   zip
   zz
 )
-PACKAGE_LIBS=(zz luajit cmp nanomsg)
+PACKAGE_LIBS=(zz luajit cmp)
 PACKAGE_APPS=(zz)
 PACKAGE_INSTALL=(zz)
 
@@ -72,16 +71,8 @@ CMP_ROOT="native/$CMP_DIR"
 CMP_SRC="$CMP_ROOT"
 CMP_OBJ="$CMP_SRC/cmp.o"
 
-NANOMSG_VER="1.1.5"
-NANOMSG_TGZ="nanomsg-$NANOMSG_VER.tar.gz"
-NANOMSG_URL="https://github.com/nanomsg/nanomsg/archive/$NANOMSG_VER.tar.gz"
-NANOMSG_DIR="nanomsg-$NANOMSG_VER"
-NANOMSG_ROOT="native/$NANOMSG_DIR"
-NANOMSG_LIB="$NANOMSG_ROOT/libnanomsg.a"
-NANOMSG_SRC="$NANOMSG_ROOT/src"
-
 CC="${CC:-gcc}"
-CFLAGS="-Wall -iquote $LUAJIT_SRC -iquote $NANOMSG_SRC -iquote $CMP_SRC"
+CFLAGS="-Wall -iquote $LUAJIT_SRC -iquote $CMP_SRC"
 LDFLAGS="-Wl,-E -lm -ldl -lpthread -lanl"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -162,21 +153,6 @@ build_cmp() {
   fi
   if [ "$CMP_OBJ" -nt "$LIBDIR/libcmp.a" ]; then
     run ar rsvc "$LIBDIR/libcmp.a" "$CMP_OBJ"
-  fi
-}
-
-build_nanomsg() {
-  download "$NANOMSG_URL" "$NANOMSG_TGZ"
-  extract "$NANOMSG_TGZ" "$NANOMSG_DIR"
-  if [ ! -e "$NANOMSG_LIB" ]; then
-    run ln -sfvT . "$NANOMSG_ROOT/src/nanomsg"
-    touch "$NANOMSG_ROOT/.patched"
-    (cd "$NANOMSG_ROOT" && run cmake -DNN_STATIC_LIB=ON -DNN_ENABLE_DOC=OFF -DNN_TOOLS=OFF .)
-    (cd "$NANOMSG_ROOT" && run cmake --build .)
-    (cd "$NANOMSG_ROOT" && run ctest -G Debug .)
-  fi
-  if [ "$NANOMSG_LIB" -nt "$LIBDIR/$(basename "$NANOMSG_LIB")" ]; then
-    run install -v -t "$LIBDIR" -D -m 0644 -p "$NANOMSG_LIB"
   fi
 }
 
@@ -396,7 +372,6 @@ build_native() {
   mkdir -pv native
   build_luajit
   build_cmp
-  build_nanomsg
 }
 
 do_build() {
@@ -419,7 +394,6 @@ do_clean() {
 do_nativeclean() {
   [ -e "$LUAJIT_ROOT/Makefile" ] && (cd "$LUAJIT_ROOT" && run make clean)
   [ -e "$CMP_OBJ" ] && run rm -f "$CMP_OBJ"
-  [ -e "$NANOMSG_ROOT/Makefile" ] && (cd "$NANOMSG_ROOT" && run make clean)
 }
 
 do_distclean() {
