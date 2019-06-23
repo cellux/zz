@@ -18,6 +18,9 @@ testing("trigger", function()
 
    local function wait_for_stop()
       t:poll()
+      -- after poll returns, t must be reset by reading from it
+      -- otherwise it continues to indicate that it is readable
+      t:read()
       assert.equals(wood_gathered, 52)
       keep_gathering_wood = false
    end
@@ -52,7 +55,8 @@ testing("write", function()
    local values = {}
    local reader = sched(function()
       while true do
-         local value = t:poll()
+         -- wait = poll + read
+         local value = t:wait()
          table.insert(values, value)
          if value == 1 then
             break
@@ -91,7 +95,7 @@ testing("Semaphore", function()
    local values = {}
    local reader = sched(function()
       while #values < 11 do
-         local value = t:poll()
+         local value = t:wait()
          table.insert(values, value)
       end
    end)

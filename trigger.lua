@@ -1,5 +1,4 @@
 local ffi = require('ffi')
-local sched = require('sched')
 local util = require('util')
 local errno = require('errno')
 
@@ -23,6 +22,23 @@ local M = {}
 
 local Trigger_mt = {}
 
+function Trigger_mt:write(data)
+   local buf = ffi.new("uint64_t[1]")
+   buf[0] = data
+   ffi.C.write(self.fd, buf, 8)
+end
+
+function Trigger_mt:fire()
+   self:write(1)
+end
+
+function Trigger_mt:poll()
+   local sched = require('sched')
+   if sched.ticking() then
+      sched.poll(self.fd, "r")
+   end
+end
+
 function Trigger_mt:read()
    local buf = ffi.new("uint64_t[1]", 0)
    local nbytes = ffi.C.read(self.fd, buf, 8)
@@ -41,25 +57,9 @@ function Trigger_mt:read()
    end
 end
 
-function Trigger_mt:poll()
-   local rv = nil
-   while not rv do
-      if sched.ticking() then
-         sched.poll(self.fd, "r")
-      end
-      rv = self:read()
-   end
-   return rv
-end
-
-function Trigger_mt:write(data)
-   local buf = ffi.new("uint64_t[1]")
-   buf[0] = data
-   ffi.C.write(self.fd, buf, 8)
-end
-
-function Trigger_mt:fire()
-   self:write(1)
+function Trigger_mt:wait()
+   self:poll()
+   return self:read()
 end
 
 function Trigger_mt:delete()

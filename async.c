@@ -74,7 +74,7 @@ void *zz_async_worker_thread(void *arg) {
    */
 
   while (1) {
-    zz_trigger_poll(&info->request_trigger);
+    zz_trigger_wait(&info->request_trigger);
     /* worker_id is a 1-based index to the registered_workers array */
     int worker_id = info->worker_id;
     /* worker_id == -1 is the exit signal */

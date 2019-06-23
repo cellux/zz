@@ -507,7 +507,7 @@ local function qpoll(fd, cb, quit_event) -- "quittable" poll
          if data == fd then
             cb()
          elseif data == exit_trigger.fd then
-            exit_trigger:read()
+            exit_trigger:read() -- reset trigger
             running = false
          else
             ef("invalid fd in epoll event")

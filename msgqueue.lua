@@ -93,6 +93,7 @@ function Queue:new(size)
       cond_r = cond_r,
       cond_w = cond_w,
       trig_r = trig_r,
+      fd = trig_r.fd, -- for easier access
       q = q,
       msgpack_context = msgpack_context,
    }
@@ -179,6 +180,21 @@ function Queue:pack(x, serialize)
    serialize = serialize or msgpack.pack
    local buf = serialize(x)
    self:write(buf.ptr, #buf)
+end
+
+function Queue:wait()
+   -- wait is a poll followed by a read on the trigger's event fd
+   return self.trig_r:wait()
+end
+
+function Queue:reset_trigger()
+   -- reset_trigger() should be called after a poller detected that
+   -- the trigger's event fd became readable
+   --
+   -- without this read, the trigger event fd would continue to report
+   -- that it's readable which is bad if the corresponding message has
+   -- been already consumed
+   self.trig_r:read()
 end
 
 function Queue:unpack()

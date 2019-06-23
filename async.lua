@@ -73,7 +73,7 @@ local function create_worker_thread()
       worker_info.handler_id = handler_id
       worker_info.request_data = request_data
       request_trigger:fire()
-      response_trigger:poll()
+      response_trigger:wait() -- wait = poll + read
    end
    function self:stop()
       self:send_request(-1, 0, nil)

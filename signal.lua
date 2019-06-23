@@ -94,7 +94,7 @@ local function SignalModule(sched)
       local rv = ffi.C.pthread_create(signal_handler_thread_id,
                                       nil,
                                       ffi.C.zz_signal_handler_thread,
-                                      nil)
+                                      sched.msgqueue)
       if rv ~= 0 then
          ef("cannot create signal handler thread: pthread_create() failed")
       end

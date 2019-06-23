@@ -1,11 +1,13 @@
 local ffi = require('ffi')
 local time = require('time')
-local nn = require('nanomsg')
 local msgpack = require('msgpack')
+local msgqueue = require('msgqueue')
 local inspect = require('inspect')
 local util = require('util')
 
 local M = {}
+
+M.MSGQUEUE_SIZE = 16384
 
 local scheduler_state = "off"
 
@@ -38,15 +40,15 @@ end
 
 local module_constructors = {}
 
--- modules register themselves via this function if they want to do
--- something when the scheduler singleton initializes itself (init),
+-- modules register themselves via `register_module` if they want to
+-- do something when the scheduler singleton initializes (init),
 -- executes one cycle of its main loop (tick) or cleans up (done)
 function M.register_module(mc)
    table.insert(module_constructors, mc)
 end
 
 -- every scheduler singleton has a module registry which keeps track
--- of the (module-provided) hooks to be invoked at init/tick/done
+-- of the module hooks to be invoked at init/tick/done
 local function ModuleRegistry(scheduler)
    local hooks = {
       init = {},
@@ -78,7 +80,7 @@ local scheduler_singleton
 local OFF = {}
 M.OFF = OFF
 
--- the clock to use by timers
+-- the system clock used by timers
 local sched_clock_id = time.CLOCK_MONOTONIC_RAW
 
 local function get_current_time()
@@ -88,24 +90,26 @@ end
 M.time = get_current_time
 
 -- after sched.wait(t), math.abs(sched.time()-t) is expected to be
--- less than sched.precision
+-- less than `sched.precision`
 M.precision = 0.005 -- seconds
 
+-- event ids may be permanent (reuseable) or one-shot
 M.permanent_event_id_pool_size = 1048576
 
 local function EventIdGenerator()
-   -- permanent event ids are allocated at the beginning of the range
+   -- permanent event ids are allocated from the beginning of the range
+   local next_permanent_event_id = 1
+
    local first_event_id = M.permanent_event_id_pool_size + 1
+   local next_event_id = first_event_id
    local last_event_id = 2^31
 
-   local next_permanent_event_id = 1
-   local next_event_id = first_event_id
-
-   return function(permanent)
+   local function make_event_id(permanent)
       local event_id
       if permanent then
          event_id = next_permanent_event_id
          if next_permanent_event_id == first_event_id then
+            -- if this happens, we are doomed
             ef("permanent event id overflow, pool size: %d", M.permanent_event_id_pool_size)
          else
             next_permanent_event_id = next_permanent_event_id + 1
@@ -113,40 +117,47 @@ local function EventIdGenerator()
       else
          event_id = next_event_id
          if next_event_id == last_event_id then
-            pf("event id turnaround detected. fingers crossed.")
-            -- we can just hope that this is ok
+            -- when normal event ids overflow, we start reusing event
+            -- ids from the beginning of the range
+            --
+            -- TODO: this is a landmine. if normal event ids are used
+            -- for too long, two parts of the code may end up using
+            -- the same event id which is recipe for disaster
+            pf("event id turnaround detected. fingers crossed...")
             next_event_id = first_event_id
          else
             next_event_id = next_event_id + 1
          end
       end
-      -- why the returned event ids are negative:
+      -- why are event ids negative?
       --
       -- when a thread yields a number, it may be either positive (an
       -- absolute point in time when the thread should be woken up) or
       -- negative (an event id to wait for)
       return -event_id
    end
+
+   return make_event_id
 end
 
-local function Scheduler() -- scheduler constructor
+local function Scheduler()
    local self = {}
 
    -- threads may allocate event_ids and wait for them. when the event
-   -- loop gets an event with a particular id, it wakes up the thread
-   -- which is waiting for it
+   -- loop gets an event with a particular id, it wakes up all threads
+   -- waiting for it
    --
    -- make_event_id() generates a one-shot event id: these are
    -- typically used to wait for a single event and then never used
    -- again (thus they can be recycled)
    --
    -- make_event_id(true) generates a permanent event id: these are
-   -- guaranteed to be unique (they will never be returned again)
+   -- guaranteed to be unique (they will never be reused)
    self.make_event_id = EventIdGenerator()
 
    local poller = M.poller_factory()
 
-   -- these fds have been permanently added to the poll set (instead of
+   -- registered fds are permanently added to the poll set (instead of
    -- adding/removing at every poll as it happens for one-shot polls)
    local registered_fds = {}
 
@@ -164,27 +175,30 @@ local function Scheduler() -- scheduler constructor
       registered_fds[fd] = nil
    end
 
-   -- the poller's own fd (which is only provided by epoll on Linux so
-   -- this somewhat limits the range of possible implementations)
+   -- the poller's own fd - we poll this when we want notifications
+   -- about events happening on any of the fds in the current poll set
    function self.poller_fd()
       return poller:fd()
    end
 
    -- suspend the calling thread until there is
-   -- an event on `fd` matching `events`
+   -- an event on `fd` which matches `events`
    function self.poll(fd, events)
       assert(type(events)=="string")
       local received_events
       local event_id = registered_fds[fd]
       if event_id then
+         -- this fd has been previously registered with the poller and
+         -- has a dedicated (permanent) event_id which we can use
          repeat
             received_events = self.wait(event_id)
          until poller:match_events(events, received_events)
       else
-         events = events.."1" -- one shot
+         -- one-shot poll
+         events = events.."1"
+         -- we create a temporary event id which uniquely identifies
+         -- this poll operation
          event_id = self.make_event_id()
-         -- the event_id lets us differentiate between threads which
-         -- are all polling the same file descriptor
          poller:add(fd, events, event_id)
          received_events = self.wait(event_id)
          poller:del(fd, events, event_id)
@@ -208,7 +222,7 @@ local function Scheduler() -- scheduler constructor
 
    -- sleeping threads are waiting for their time to come
    --
-   -- the list is ordered by wake-up time
+   -- they are kept in a priority list ordered by wake-up time
    local sleeping = util.OrderedList(function(st) return st.time end)
 
    local function SleepingRunnable(r, time)
@@ -218,9 +232,11 @@ local function Scheduler() -- scheduler constructor
    -- `waiting` is a registry of runnables which are currently waiting
    -- for various events
    --
-   -- key: evtype, value: array of runnables
+   -- key: evtype, value: array of runnables waiting for `evtype`
    --
-   -- evtype can be an event id, a string (e.g. 'quit'), a thread or any other object
+   -- evtype can be any object: an event id, a string (e.g. 'quit'), a
+   -- thread, etc.
+   --
    -- a runnable can be a thread, a background thread or a function
    local waiting = {}
    local n_waiting_threads = 0
@@ -262,22 +278,20 @@ local function Scheduler() -- scheduler constructor
    -- 3. gives all runnable threads a chance to run (resume)
    local event_queue = util.List()
 
-   -- event_sub: the socket we receive events from
-   -- C threads can use this socket to post events
-   local event_sub = nn.socket(nn.AF_SP, nn.SUB)
-   nn.setsockopt(event_sub, nn.SUB, nn.SUB_SUBSCRIBE, "")
-   nn.bind(event_sub, "inproc://events")
+   -- message_queue can be used to inject events into the scheduler
+   -- event queue from C threads
+   local message_queue = msgqueue(M.MSGQUEUE_SIZE)
+   local message_queue_event_id = self.make_event_id(true)
+   poller:add(message_queue.fd, "r", message_queue_event_id)
 
-   -- setup permanent polling for event_sub
-   local event_sub_fd = nn.getsockopt(event_sub, 0, nn.RCVFD)
-   local event_sub_id = self.make_event_id(true)
-   poller:add(event_sub_fd, "r", event_sub_id)
+   -- C threads need access to the internal zz_msgqueue struct
+   self.msgqueue = message_queue.q
 
    -- tick: one iteration of the event loop
    local function tick() 
       local now = get_current_time()
 
-      -- let threads know the time when the current tick started
+      -- remember the time when the current tick started
       self.now = now
 
       local function wakeup_sleepers(now)
@@ -294,12 +308,12 @@ local function Scheduler() -- scheduler constructor
       module_registry:invoke('tick')
 
       local function handle_poll_event(received_events, userdata)
-         if userdata == event_sub_id then
-            local event = nn.recv(event_sub)
-            local unpacked = msgpack.unpack(event)
-            assert(type(unpacked) == "table")
-            assert(#unpacked == 2, "event shall be a table of two elements, but it is "..inspect(unpacked))
-            event_queue:push(unpacked)
+         if userdata == message_queue_event_id then
+            message_queue:reset_trigger()
+            local event = message_queue:unpack()
+            assert(type(event) == "table")
+            assert(#event == 2, "event shall be a table of two elements, but it is "..inspect(event))
+            event_queue:push(event)
          else
             -- evtype: userdata, evdata: received_events
             event_queue:push({userdata, received_events})
@@ -354,8 +368,8 @@ local function Scheduler() -- scheduler constructor
                   -- background thread in r[1]
                   runnables:push(Runnable(r, evdata))
                elseif type(r)=="function" then
-                  -- callback: every event creates a new thread which
-                  -- executes the callback function
+                  -- callback: create a new thread which executes the
+                  -- callback function
                   local function wrapper(evdata)
                      -- remove the callback if it returns sched.OFF
                      -- quit handlers are also automatically removed
@@ -450,8 +464,8 @@ local function Scheduler() -- scheduler constructor
          if runnables:empty()
             and sleeping:empty()
             and n_waiting_threads == 0 then
-               -- all threads exited without anyone calling
-               -- sched.quit(), so we have to do it
+               -- all non-background threads exited without anyone
+               -- calling sched.quit(), so we have to do it
                self.quit()
          end
       end
@@ -467,23 +481,26 @@ local function Scheduler() -- scheduler constructor
    local function to_function(x)
       if type(x)=="function" then
          return x
-      elseif getmetatable(x).__call then
-         return function(...)
-            x(...)
-         end
       else
-         ef("expected a callable, got: %s", x)
+         local mt = getmetatable(x)
+         if mt and mt.__call then
+            return function(...)
+               x(...)
+            end
+         else
+            ef("expected a callable, got: %s", x)
+         end
       end
    end
 
    function self.sched(fn, data)
       if fn then
-         -- add fn to the list of runnable threads
+         -- add fn to the list of runnables
          local t = coroutine.create(to_function(fn))
          runnables:push(Runnable(t, data))
          return t
       else
-         -- enter the event loop, continue scheduling until there is
+         -- start the event loop and keep scheduling while there is
          -- work to do. when the event loop exits, cleanup and destroy
          -- this scheduler instance.
          scheduler_state = "init"
@@ -491,9 +508,9 @@ local function Scheduler() -- scheduler constructor
          local ok, err = pcall(self.loop)
          scheduler_state = "done"
          module_registry:invoke('done')
-         poller:del(event_sub_fd, "r", event_sub_id)
+         poller:del(message_queue.fd, "r", message_queue_event_id)
          poller:close()
-         nn.close(event_sub)
+         message_queue:delete()
          event_queue:clear()
          scheduler_singleton = nil
          scheduler_state = "off"

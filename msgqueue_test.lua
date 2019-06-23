@@ -64,7 +64,7 @@ testing('msgqueue/c', function()
    local received_message
    local receiver = sched(function()
       -- calling q:unpack() with no messages in the queue -> deadlock
-      q.trig_r:poll()
+      q:wait()
       received_message = q:unpack()
    end)
 
@@ -139,7 +139,7 @@ testing('multiple writers (stress test)', function()
    local consumer = sched(function()
       local remaining = writer_count
       while remaining > 0 do
-         q.trig_r:poll()
+         q:wait()
          -- when the msgqueue trigger becomes readable, we have at
          -- least one message in the queue waiting to be processed
          local msg = q:unpack()
@@ -182,4 +182,32 @@ testing('multiple writers (stress test)', function()
    sched.join(consumer)
    assert.equals(expected, arrived)
    q:delete()
+end)
+
+testing('trigger fd', function()
+   local q = msgqueue(128)
+   -- the trigger fd is aliased to q.fd for easier access
+   assert(q.fd == q.trig_r.fd)
+   q:delete()
+end)
+
+testing('reset_trigger', function()
+   local q = msgqueue(128)
+   q:pack("hello")
+   sched.poll(q.fd, "r")
+   assert.equals(q:unpack(), "hello")
+   -- at this point, q.fd is still readable because the trigger has
+   -- not been read
+   sched.poll(q.fd, "r")
+   -- reset_trigger() resets the trigger by reading it
+   q:reset_trigger()
+   sched.background(function()
+         -- this thread should never return
+         --
+         -- we use a background thread because we do not want to keep
+         -- the event loop alive
+         sched.poll(q.fd, "r")
+         ef("unexpected return from sched.poll()")
+   end)
+   sched.on('quit', function() q:delete() end)
 end)
