@@ -555,29 +555,35 @@ local function Scheduler() -- scheduler constructor
 
    function self.join(threadlist)
       if type(threadlist) == "thread" then
-         threadlist = { threadlist }
-      end
-      local count = #threadlist
-      local all_done = self.make_event_id()
-      local function thread_is_dead(rv)
-         count = count -1
-         if count == 0 then
-            self.emit(all_done, 0)
-         end
-         return OFF
-      end
-      for _,t in ipairs(threadlist) do
-         if type(t) ~= "thread" then
-            ef("sched.join() called with non-thread arg")
-         end
+         local t = threadlist
          if coroutine.status(t) ~= "dead" then
-            self.on(t, thread_is_dead)
-         else
-            count = count - 1
+            self.wait(t)
          end
-      end
-      if count > 0 then
-         self.wait(all_done)
+      elseif type(threadlist) == "table" then
+         local count = #threadlist
+         local all_done = self.make_event_id()
+         local function thread_is_dead(rv)
+            count = count -1
+            if count == 0 then
+               self.emit(all_done, 0)
+            end
+            return OFF
+         end
+         for _,t in ipairs(threadlist) do
+            if type(t) ~= "thread" then
+               ef("sched.join() called with non-thread arg")
+            end
+            if coroutine.status(t) ~= "dead" then
+               self.on(t, thread_is_dead)
+            else
+               count = count - 1
+            end
+         end
+         if count > 0 then
+            self.wait(all_done)
+         end
+      else
+         ef("invalid argument for sched.join(): %s", threadlist)
       end
    end
 
