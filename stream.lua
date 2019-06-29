@@ -290,7 +290,7 @@ end
 function Stream:peek(size)
    self.read_buffer:fill(self, size)
    return buffer.copy(self.read_buffer:ptr(),
-                      math.min(size, self.read_buffer:length()))
+                      util.min(size, self.read_buffer:length()))
 end
 
 function Stream:write(data)
@@ -439,7 +439,7 @@ function M.with_size(remaining, s)
       return remaining == 0 or s:eof()
    end
    function self:read1(ptr, size)
-      local adjusted_size = math.min(size, remaining)
+      local adjusted_size = util.min(size, remaining)
       local bytes_read = s:read1(ptr, adjusted_size)
       remaining = remaining - bytes_read
       return bytes_read

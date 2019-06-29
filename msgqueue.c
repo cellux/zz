@@ -17,7 +17,7 @@ void zz_msgqueue_lock(zz_msgqueue *q) {
 
 void zz_msgqueue_prepare_write(zz_msgqueue *q, size_t length) {
   if (length > q->size) {
-    fprintf(stderr, "msgqueue: length (%d) exceeds queue size (%d)\n", length, q->size);
+    fprintf(stderr, "msgqueue: length (%zd) exceeds queue size (%zd)\n", length, q->size);
     exit(1);
   }
   while (q->free_space < length) {

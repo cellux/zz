@@ -23,7 +23,7 @@ local function test_digest(buf, digest_fn, digest_hex)
    local digest = digest_fn()
    local offset = 0
    for n in fibonacci() do
-      local chunk_size = math.min(#buf-offset, n)
+      local chunk_size = util.min(#buf-offset, n)
       digest:update(buf.ptr+offset, chunk_size)
       offset = offset + chunk_size
       if offset == #buf then

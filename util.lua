@@ -474,6 +474,16 @@ function M.reverse(t)
    return rv
 end
 
+function M.min(a, b)
+   -- this also works on (u)int64_t values (contrary to math.min)
+   return a < b and a or b
+end
+
+function M.max(a, b)
+   -- this also works on (u)int64_t values (contrary to math.min)
+   return a > b and a or b
+end
+
 -- error handling
 
 local Error = M.Class()
