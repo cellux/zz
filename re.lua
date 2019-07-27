@@ -18,6 +18,40 @@ int  pcre_exec(const struct pcre *,
 struct pcre_extra *pcre_study(const struct pcre *,
                               int, const char **);
 void pcre_free_study(struct pcre_extra *);
+int pcre_fullinfo(const struct pcre *code,
+                  const struct pcre_extra *extra,
+                  int what, void *where);
+
+enum {
+  PCRE_INFO_OPTIONS             = 0,
+  PCRE_INFO_SIZE                = 1,
+  PCRE_INFO_CAPTURECOUNT        = 2,
+  PCRE_INFO_BACKREFMAX          = 3,
+  PCRE_INFO_FIRSTBYTE           = 4,
+  PCRE_INFO_FIRSTCHAR           = 4,  /* For backwards compatibility */
+  PCRE_INFO_FIRSTTABLE          = 5,
+  PCRE_INFO_LASTLITERAL         = 6,
+  PCRE_INFO_NAMEENTRYSIZE       = 7,
+  PCRE_INFO_NAMECOUNT           = 8,
+  PCRE_INFO_NAMETABLE           = 9,
+  PCRE_INFO_STUDYSIZE           = 10,
+  PCRE_INFO_DEFAULT_TABLES      = 11,
+  PCRE_INFO_OKPARTIAL           = 12,
+  PCRE_INFO_JCHANGED            = 13,
+  PCRE_INFO_HASCRORLF           = 14,
+  PCRE_INFO_MINLENGTH           = 15,
+  PCRE_INFO_JIT                 = 16,
+  PCRE_INFO_JITSIZE             = 17,
+  PCRE_INFO_MAXLOOKBEHIND       = 18,
+  PCRE_INFO_FIRSTCHARACTER      = 19,
+  PCRE_INFO_FIRSTCHARACTERFLAGS = 20,
+  PCRE_INFO_REQUIREDCHAR        = 21,
+  PCRE_INFO_REQUIREDCHARFLAGS   = 22,
+  PCRE_INFO_MATCHLIMIT          = 23,
+  PCRE_INFO_RECURSIONLIMIT      = 24,
+  PCRE_INFO_MATCH_EMPTY         = 25
+};
+
 ]]
 
 local pcre = ffi.load("pcre")
@@ -83,6 +117,17 @@ local pcre_mt = {
       if errptr[0] ~= nil then
          ef("pcre_study() failed: %s", ffi.string(errptr[0]))
       end
+   end,
+   options = function(self)
+      local data = ffi.new("unsigned long[1]")
+      local rv = pcre.pcre_fullinfo(self.pcre,
+                                    self.pcre_extra,
+                                    pcre.PCRE_INFO_OPTIONS,
+                                    data)
+      if rv ~= 0 then
+         ef("pcre_fullinfo() failed")
+      end
+      return tonumber(data[0])
    end,
    match = function(self, subject, startoffset, options)
       local buf = buffer.wrap(subject)
