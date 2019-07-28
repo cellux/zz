@@ -241,11 +241,10 @@ function Stream:match(pattern)
    pattern = re.compile(pattern)
    local buf = buffer.new()
    local startoffset = 0
+   local is_anchored = bit.band(pattern:options(), re.ANCHORED) ~= 0
    while true do
       local chunk = self:read()
       if #chunk == 0 then
-         assert(self.read_buffer:length() == 0)
-         self.read_buffer:set(buf)
          break
       end
       buf:append(chunk)
@@ -261,10 +260,17 @@ function Stream:match(pattern)
             end
             return m
          end
+      elseif is_anchored then
+         -- pattern is anchored at the beginning
+         -- we found no match (not even a partial one)
+         break
       else
          startoffset = buf.len
       end
    end
+   -- unread what we consumed
+   assert(self.read_buffer:length() == 0)
+   self.read_buffer:set(buf)
    return nil
 end
 
