@@ -276,7 +276,9 @@ end
 
 function Stream:read_byte()
    local byte
-   self.read_buffer:fill(self)
+   if self.read_buffer:length() == 0 then
+      self.read_buffer:fill(self)
+   end
    if self.read_buffer:length() > 0 then
       byte = self.read_buffer:ptr()[0]
       self.read_buffer:consume(1)

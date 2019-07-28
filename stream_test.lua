@@ -365,3 +365,20 @@ testing("stream.no_close", function()
    assert(f.fd > 0)
    f:close()
 end)
+
+testing("reading characters from pipe wrapped via fs.fd()", function()
+   -- trying to simulate what happens when we read from stdin
+   local sock1,sock2 = net.socketpair(net.PF_LOCAL, net.SOCK_STREAM)
+   local s1 = stream(sock1)
+   local f2 = fs.fd(sock2.fd) -- like fs.fd(0) for reading from stdin
+   local s2 = stream(f2)
+   local input = "0123456789abcdef"
+   s1:write(input)
+   for i=1,#input do
+      local ch = input:sub(i,i)
+      assert.equals(s2:peek(1), ch)
+      assert.equals(s2:read_char(), ch)
+   end
+   s1:close()
+   s2:close()
+end)
